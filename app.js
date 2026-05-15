@@ -21,7 +21,7 @@ const blankState = {
   shifts: []
 };
 
-let state = loadState();
+let state = structuredClone(blankState);
 let deferredInstallPrompt = null;
 let currentUserId = (SESSION_KEY);
 
@@ -37,13 +37,20 @@ const views = {
   usuarios: "Usuarios"
 };
 
-document.addEventListener("DOMContentLoaded", () => {
+window.addEventListener("DOMContentLoaded", () => {
+
   registerMobileApp();
+
   bindAuth();
+
   bindNavigation();
+
   bindForms();
+
   loadState();
+
   bootApp();
+
 });
 
 window.addEventListener("beforeinstallprompt", (event) => {
