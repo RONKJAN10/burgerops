@@ -178,7 +178,7 @@ function bindForms() {
       return;
     }
     const quantity = Number(data.quantity);
-    const total = Number(data.total);
+    const total = Number(data.total || 0);
     ingredient.stock += quantity;
     ingredient.cost = total / quantity;
     state.purchases.unshift({
@@ -192,6 +192,10 @@ function bindForms() {
     form.reset();
     persistAndRender("Compra registrada y stock actualizado.");
   });
+
+  document.getElementById("purchaseIngredient").addEventListener("change", updatePurchasePrice);
+  document.getElementById("purchaseForm").quantity.addEventListener("input", updatePurchaseTotal);
+  document.getElementById("purchaseForm").unitPrice.addEventListener("input", updatePurchaseTotal);
 
   document.getElementById("recipeForm").addEventListener("submit", (event) => {
     event.preventDefault();
@@ -222,24 +226,31 @@ function bindForms() {
       return;
     }
     const quantity = Number(data.quantity);
+    const saleTotal = calculateSaleTotal();
+    const amountReceived = Number(data.amountReceived || 0);
     state.sales.unshift({
       id: makeId("sale"),
       date: todayISO(),
       productId: product.id,
       quantity,
       channel: data.channel,
-      total: product.price * quantity,
+      total: saleTotal,
       cost: 0,
+      amountReceived,
+      changeDue: Math.max(0, amountReceived - saleTotal),
       shiftId: activeShift.id,
       userId: currentUserId
     });
 
     form.reset();
     form.quantity.value = 1;
+    updateSaleTotals();
     persistAndRender("Venta registrada.");
   });
 
-  document.getElementById("saleProduct").addEventListener("change", renderSaleHint);
+  document.getElementById("saleProduct").addEventListener("change", updateSaleTotals);
+  document.getElementById("saleForm").quantity.addEventListener("input", updateSaleTotals);
+  document.getElementById("saleForm").amountReceived.addEventListener("input", updateSaleTotals);
   document.getElementById("printLastTicket").addEventListener("click", () => printTicket(state.sales[0]));
 
   document.getElementById("shiftForm").addEventListener("submit", (event) => {
@@ -411,12 +422,51 @@ function renderSelectors() {
     .join("");
   document.getElementById("purchaseIngredient").innerHTML = ingredientOptions || `<option value="">Sin insumos</option>`;
   document.getElementById("purchaseIngredient").disabled = !state.ingredients.length;
+  updatePurchasePrice();
 
   const productOptions = state.products
     .map((product) => `<option value="${product.id}">${escapeHTML(product.name)} - ${money(product.price)}</option>`)
     .join("");
   document.getElementById("saleProduct").innerHTML = productOptions || `<option value="">Sin productos</option>`;
   document.getElementById("saleProduct").disabled = !state.products.length;
+  updateSaleTotals();
+}
+
+function updatePurchasePrice() {
+  const form = document.getElementById("purchaseForm");
+  const ingredient = findIngredient(form.ingredientId.value);
+  if (!ingredient) {
+    form.unitPrice.value = "";
+    form.total.value = "";
+    return;
+  }
+  const lastPurchase = state.purchases.find((purchase) => purchase.ingredientId === ingredient.id && purchase.quantity > 0);
+  const lastPrice = lastPurchase ? lastPurchase.total / lastPurchase.quantity : ingredient.cost;
+  form.unitPrice.value = roundInput(lastPrice);
+  updatePurchaseTotal();
+}
+
+function updatePurchaseTotal() {
+  const form = document.getElementById("purchaseForm");
+  const quantity = Number(form.quantity.value || 0);
+  const unitPrice = Number(form.unitPrice.value || 0);
+  form.total.value = quantity && unitPrice ? roundInput(quantity * unitPrice) : "";
+}
+
+function calculateSaleTotal() {
+  const form = document.getElementById("saleForm");
+  const product = findProduct(form.productId.value);
+  const quantity = Number(form.quantity.value || 0);
+  return product ? product.price * quantity : 0;
+}
+
+function updateSaleTotals() {
+  const form = document.getElementById("saleForm");
+  const total = calculateSaleTotal();
+  const received = Number(form.amountReceived.value || 0);
+  form.saleTotal.value = roundInput(total);
+  form.changeDue.value = roundInput(Math.max(0, received - total));
+  renderSaleHint();
 }
 
 function renderMetrics() {
@@ -991,6 +1041,8 @@ function printTicket(sale) {
     `Cantidad: ${sale.quantity}`,
     `Canal: ${sale.channel}`,
     `Total: ${money(sale.total)}`,
+    `Recibido: ${money(sale.amountReceived || 0)}`,
+    `Vuelto: ${money(sale.changeDue || 0)}`,
     `Atendido por: ${user?.name || "Usuario"}`,
     "Gracias por su compra"
   ];
@@ -1005,9 +1057,9 @@ function printTicket(sale) {
 }
 
 function exportSales() {
-  downloadCSV("ventas.csv", [["fecha", "producto", "cantidad", "canal", "total", "costo", "margen"], ...state.sales.map((sale) => {
+  downloadCSV("ventas.csv", [["fecha", "producto", "cantidad", "canal", "total", "recibido", "vuelto", "costo", "margen"], ...state.sales.map((sale) => {
     const product = findProduct(sale.productId);
-    return [sale.date, product?.name || "", sale.quantity, sale.channel, sale.total, sale.cost, sale.total - sale.cost];
+    return [sale.date, product?.name || "", sale.quantity, sale.channel, sale.total, sale.amountReceived || 0, sale.changeDue || 0, sale.cost, sale.total - sale.cost];
   })]);
 }
 
@@ -1064,6 +1116,10 @@ function money(value) {
 
 function round(value) {
   return Number(value).toLocaleString("es-PE", { maximumFractionDigits: 2 });
+}
+
+function roundInput(value) {
+  return Number(value || 0).toFixed(2);
 }
 
 function todayISO() {

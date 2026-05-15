@@ -194,6 +194,7 @@
               <label>Proveedor<input name="supplier" required placeholder="Mercado / proveedor"></label>
               <label>Insumo<select name="ingredientId" id="purchaseIngredient"></select></label>
               <label>Cantidad<input name="quantity" type="number" min="0.01" step="0.01" required></label>
+              <label>Precio unitario S/<input name="unitPrice" type="number" min="0" step="0.01" required></label>
               <label>Costo total S/<input name="total" type="number" min="0" step="0.01" required></label>
               <button class="primary-button" type="submit">Registrar compra</button>
             </form>
@@ -250,6 +251,9 @@
               </div>
               <label>Producto<select name="productId" id="saleProduct"></select></label>
               <label>Cantidad<input name="quantity" type="number" min="1" step="1" value="1" required></label>
+              <label>Total venta S/<input name="saleTotal" type="number" min="0" step="0.01" readonly></label>
+              <label>Monto recibido S/<input name="amountReceived" type="number" min="0" step="0.01" placeholder="0.00"></label>
+              <label>Vuelto S/<input name="changeDue" type="number" min="0" step="0.01" readonly></label>
               <label>Canal
                 <select name="channel">
                   <option>Salon</option>
