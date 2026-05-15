@@ -1,67 +1,17 @@
-const STORAGE_KEY = "burgerops-state-v1";
+const STORAGE_KEY = "burgerops-state-v2";
+const SESSION_KEY = "burgerops-session-v1";
 
-const demoState = {
-  ingredients: [
-    { id: "ing-1", name: "Carne premium", unit: "kg", stock: 18, minStock: 6, cost: 28 },
-    { id: "ing-2", name: "Pan brioche", unit: "unidad", stock: 96, minStock: 30, cost: 1.2 },
-    { id: "ing-3", name: "Queso cheddar", unit: "unidad", stock: 84, minStock: 28, cost: 0.9 },
-    { id: "ing-4", name: "Tocino ahumado", unit: "kg", stock: 4.8, minStock: 2, cost: 36 },
-    { id: "ing-5", name: "Papas congeladas", unit: "kg", stock: 22, minStock: 8, cost: 7.5 },
-    { id: "ing-6", name: "Salsa de casa", unit: "litro", stock: 5, minStock: 2, cost: 10 }
-  ],
-  products: [
-    {
-      id: "prod-1",
-      name: "Cheeseburger clasica",
-      price: 18,
-      recipe: [
-        { ingredientId: "ing-1", quantity: 0.15 },
-        { ingredientId: "ing-2", quantity: 1 },
-        { ingredientId: "ing-3", quantity: 1 },
-        { ingredientId: "ing-6", quantity: 0.03 }
-      ]
-    },
-    {
-      id: "prod-2",
-      name: "Bacon burger",
-      price: 24,
-      recipe: [
-        { ingredientId: "ing-1", quantity: 0.18 },
-        { ingredientId: "ing-2", quantity: 1 },
-        { ingredientId: "ing-3", quantity: 1 },
-        { ingredientId: "ing-4", quantity: 0.06 },
-        { ingredientId: "ing-6", quantity: 0.03 }
-      ]
-    },
-    {
-      id: "prod-3",
-      name: "Combo burger papas",
-      price: 28,
-      recipe: [
-        { ingredientId: "ing-1", quantity: 0.15 },
-        { ingredientId: "ing-2", quantity: 1 },
-        { ingredientId: "ing-3", quantity: 1 },
-        { ingredientId: "ing-5", quantity: 0.22 },
-        { ingredientId: "ing-6", quantity: 0.03 }
-      ]
-    }
-  ],
-  purchases: [
-    { id: "pur-1", date: daysAgo(4), supplier: "Distribuidora Central", ingredientId: "ing-1", quantity: 10, total: 280 },
-    { id: "pur-2", date: daysAgo(2), supplier: "Panaderia Norte", ingredientId: "ing-2", quantity: 80, total: 96 }
-  ],
-  sales: [
-    { id: "sale-1", date: daysAgo(6), productId: "prod-1", quantity: 9, channel: "Salon", total: 162, cost: 48.33 },
-    { id: "sale-2", date: daysAgo(5), productId: "prod-2", quantity: 7, channel: "Delivery", total: 168, cost: 65.24 },
-    { id: "sale-3", date: daysAgo(4), productId: "prod-3", quantity: 10, channel: "Salon", total: 280, cost: 78.5 },
-    { id: "sale-4", date: daysAgo(2), productId: "prod-1", quantity: 14, channel: "Recojo", total: 252, cost: 75.18 },
-    { id: "sale-5", date: daysAgo(1), productId: "prod-2", quantity: 8, channel: "Salon", total: 192, cost: 74.56 },
-    { id: "sale-6", date: todayISO(), productId: "prod-3", quantity: 12, channel: "Delivery", total: 336, cost: 94.2 }
-  ]
+const blankState = {
+  users: [],
+  ingredients: [],
+  products: [],
+  purchases: [],
+  sales: []
 };
 
 let state = loadState();
 let deferredInstallPrompt = null;
+let currentUserId = localStorage.getItem(SESSION_KEY);
 
 const views = {
   dashboard: "Dashboard",
@@ -69,14 +19,16 @@ const views = {
   compras: "Compras",
   recetas: "Recetas",
   ventas: "Ventas",
-  reportes: "Reportes"
+  reportes: "Reportes",
+  usuarios: "Usuarios"
 };
 
 document.addEventListener("DOMContentLoaded", () => {
   registerMobileApp();
+  bindAuth();
   bindNavigation();
   bindForms();
-  renderAll();
+  bootApp();
 });
 
 window.addEventListener("beforeinstallprompt", (event) => {
@@ -115,12 +67,78 @@ function bindNavigation() {
     deferredInstallPrompt = null;
     document.getElementById("installApp").setAttribute("hidden", "");
   });
-  document.getElementById("resetDemo").addEventListener("click", () => {
-    state = structuredClone(demoState);
+  document.getElementById("logoutButton").addEventListener("click", () => {
+    localStorage.removeItem(SESSION_KEY);
+    currentUserId = null;
+    bootApp();
+  });
+  document.getElementById("clearBusinessData").addEventListener("click", () => {
+    const confirmed = window.confirm("Esto borrara insumos, compras, recetas y ventas. Los usuarios se conservaran. Deseas continuar?");
+    if (!confirmed) {
+      return;
+    }
+    state.ingredients = [];
+    state.products = [];
+    state.purchases = [];
+    state.sales = [];
     saveState();
     renderAll();
-    showToast("Datos demo restaurados.");
+    showToast("Datos del negocio limpiados.");
   });
+}
+
+function bindAuth() {
+  document.getElementById("setupForm").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = Object.fromEntries(new FormData(form));
+    const user = {
+      id: makeId("usr"),
+      name: data.name.trim(),
+      role: "admin",
+      pin: data.pin.trim(),
+      active: true
+    };
+    state.users.push(user);
+    saveState();
+    loginAs(user.id);
+    form.reset();
+    showToast("Administrador creado.");
+  });
+
+  document.getElementById("loginForm").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = Object.fromEntries(new FormData(form));
+    const user = state.users.find((item) => item.id === data.userId && item.active);
+    if (!user || user.pin !== data.pin.trim()) {
+      showToast("Usuario o PIN incorrecto.");
+      return;
+    }
+    loginAs(user.id);
+    form.reset();
+  });
+}
+
+function bootApp() {
+  state = normalizeState(state);
+  const hasUsers = state.users.length > 0;
+  const currentUser = getCurrentUser();
+  document.getElementById("setupForm").hidden = hasUsers;
+  document.getElementById("loginForm").hidden = !hasUsers;
+  document.getElementById("authScreen").classList.toggle("hidden", Boolean(currentUser));
+  document.querySelector(".app-shell").classList.toggle("locked", !currentUser);
+  renderLoginUsers();
+
+  if (currentUser) {
+    renderAll();
+  }
+}
+
+function loginAs(userId) {
+  currentUserId = userId;
+  localStorage.setItem(SESSION_KEY, userId);
+  bootApp();
 }
 
 function bindForms() {
@@ -145,6 +163,10 @@ function bindForms() {
     const form = event.currentTarget;
     const data = Object.fromEntries(new FormData(form));
     const ingredient = findIngredient(data.ingredientId);
+    if (!ingredient) {
+      showToast("Primero registra un insumo.");
+      return;
+    }
     const quantity = Number(data.quantity);
     const total = Number(data.total);
     ingredient.stock += quantity;
@@ -165,6 +187,10 @@ function bindForms() {
 
   document.getElementById("recipeForm").addEventListener("submit", (event) => {
     event.preventDefault();
+    if (!state.ingredients.length) {
+      showToast("Primero registra insumos para crear recetas.");
+      return;
+    }
     const form = event.currentTarget;
     const data = Object.fromEntries(new FormData(form));
     const rows = [...document.querySelectorAll(".recipe-line")];
@@ -196,6 +222,10 @@ function bindForms() {
     const form = event.currentTarget;
     const data = Object.fromEntries(new FormData(form));
     const product = findProduct(data.productId);
+    if (!product) {
+      showToast("Primero crea un producto con receta.");
+      return;
+    }
     const quantity = Number(data.quantity);
     const availability = checkAvailability(product, quantity);
 
@@ -225,6 +255,25 @@ function bindForms() {
   });
 
   document.getElementById("saleProduct").addEventListener("change", renderSaleHint);
+
+  document.getElementById("userForm").addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (getCurrentUser()?.role !== "admin") {
+      showToast("Solo un administrador puede crear usuarios.");
+      return;
+    }
+    const form = event.currentTarget;
+    const data = Object.fromEntries(new FormData(form));
+    state.users.push({
+      id: makeId("usr"),
+      name: data.name.trim(),
+      role: data.role,
+      pin: data.pin.trim(),
+      active: true
+    });
+    form.reset();
+    persistAndRender("Usuario creado.");
+  });
 }
 
 function showView(viewName) {
@@ -237,6 +286,7 @@ function showView(viewName) {
 }
 
 function renderAll() {
+  renderSession();
   renderSelectors();
   renderMetrics();
   renderDashboard();
@@ -246,19 +296,30 @@ function renderAll() {
   renderProducts();
   renderSales();
   renderReports();
+  renderUsers();
   renderSaleHint();
+}
+
+function renderSession() {
+  const user = getCurrentUser();
+  document.getElementById("logoutButton").textContent = user ? `Salir: ${user.name}` : "Salir";
+  const canAdmin = user?.role === "admin";
+  document.getElementById("clearBusinessData").hidden = !canAdmin;
+  document.querySelector('[data-view="usuarios"]').hidden = !canAdmin;
 }
 
 function renderSelectors() {
   const ingredientOptions = state.ingredients
     .map((ingredient) => `<option value="${ingredient.id}">${escapeHTML(ingredient.name)} (${ingredient.unit})</option>`)
     .join("");
-  document.getElementById("purchaseIngredient").innerHTML = ingredientOptions;
+  document.getElementById("purchaseIngredient").innerHTML = ingredientOptions || `<option value="">Sin insumos</option>`;
+  document.getElementById("purchaseIngredient").disabled = !state.ingredients.length;
 
   const productOptions = state.products
     .map((product) => `<option value="${product.id}">${escapeHTML(product.name)} - ${money(product.price)}</option>`)
     .join("");
-  document.getElementById("saleProduct").innerHTML = productOptions;
+  document.getElementById("saleProduct").innerHTML = productOptions || `<option value="">Sin productos</option>`;
+  document.getElementById("saleProduct").disabled = !state.products.length;
 }
 
 function renderMetrics() {
@@ -315,7 +376,7 @@ function renderDashboard() {
 }
 
 function renderIngredients() {
-  document.getElementById("ingredientsTable").innerHTML = state.ingredients.map((item) => {
+  document.getElementById("ingredientsTable").innerHTML = state.ingredients.length ? state.ingredients.map((item) => {
     const status = item.stock <= item.minStock ? ["Critico", "bad"] : item.stock <= item.minStock * 1.5 ? ["Vigilar", "warn"] : ["Ok", "ok"];
     return `
       <tr>
@@ -326,11 +387,11 @@ function renderIngredients() {
         <td data-label="Estado"><span class="pill ${status[1]}">${status[0]}</span></td>
       </tr>
     `;
-  }).join("");
+  }).join("") : `<tr><td data-label="Insumo"><strong>Sin insumos registrados</strong></td><td data-label="Siguiente paso">Agrega tus primeros insumos.</td></tr>`;
 }
 
 function renderPurchases() {
-  document.getElementById("purchasesTable").innerHTML = state.purchases.map((purchase) => {
+  document.getElementById("purchasesTable").innerHTML = state.purchases.length ? state.purchases.map((purchase) => {
     const ingredient = findIngredient(purchase.ingredientId);
     return `
       <tr>
@@ -341,7 +402,7 @@ function renderPurchases() {
         <td data-label="Total">${money(purchase.total)}</td>
       </tr>
     `;
-  }).join("");
+  }).join("") : `<tr><td data-label="Fecha"><strong>Sin compras registradas</strong></td><td data-label="Siguiente paso">Registra entradas de inventario.</td></tr>`;
 }
 
 function renderRecipeBuilder() {
@@ -355,7 +416,7 @@ function addRecipeLine() {
   const line = document.createElement("div");
   line.className = "recipe-line";
   line.innerHTML = `
-    <select aria-label="Insumo de receta">${state.ingredients.map((ingredient) => `<option value="${ingredient.id}">${escapeHTML(ingredient.name)}</option>`).join("")}</select>
+    <select aria-label="Insumo de receta" ${state.ingredients.length ? "" : "disabled"}>${state.ingredients.map((ingredient) => `<option value="${ingredient.id}">${escapeHTML(ingredient.name)}</option>`).join("") || `<option value="">Sin insumos</option>`}</select>
     <input aria-label="Cantidad por unidad" type="number" min="0.01" step="0.01" placeholder="Cant.">
     <button class="icon-button" type="button" title="Quitar linea">x</button>
   `;
@@ -364,7 +425,7 @@ function addRecipeLine() {
 }
 
 function renderProducts() {
-  document.getElementById("productsList").innerHTML = state.products.map((product) => {
+  document.getElementById("productsList").innerHTML = state.products.length ? state.products.map((product) => {
     const cost = productCost(product);
     const margin = product.price ? ((product.price - cost) / product.price) * 100 : 0;
     const detail = product.recipe.map((line) => {
@@ -383,11 +444,11 @@ function renderProducts() {
         </div>
       </div>
     `;
-  }).join("");
+  }).join("") : emptyRow("Sin productos configurados", "Crea recetas cuando tengas insumos registrados.");
 }
 
 function renderSales() {
-  document.getElementById("salesTable").innerHTML = state.sales.map((sale) => {
+  document.getElementById("salesTable").innerHTML = state.sales.length ? state.sales.map((sale) => {
     const product = findProduct(sale.productId);
     return `
       <tr>
@@ -399,7 +460,25 @@ function renderSales() {
         <td data-label="Margen">${money(sale.total - sale.cost)}</td>
       </tr>
     `;
-  }).join("");
+  }).join("") : `<tr><td data-label="Fecha"><strong>Sin ventas registradas</strong></td><td data-label="Siguiente paso">Crea productos y registra ventas.</td></tr>`;
+}
+
+function renderUsers() {
+  document.getElementById("usersTable").innerHTML = state.users.map((user) => `
+    <tr>
+      <td data-label="Usuario"><strong>${escapeHTML(user.name)}</strong></td>
+      <td data-label="Rol">${roleLabel(user.role)}</td>
+      <td data-label="Estado"><span class="pill ${user.active ? "ok" : "bad"}">${user.active ? "Activo" : "Inactivo"}</span></td>
+    </tr>
+  `).join("");
+}
+
+function renderLoginUsers() {
+  const select = document.getElementById("loginUser");
+  select.innerHTML = state.users
+    .filter((user) => user.active)
+    .map((user) => `<option value="${user.id}">${escapeHTML(user.name)} - ${roleLabel(user.role)}</option>`)
+    .join("");
 }
 
 function renderReports() {
@@ -450,6 +529,9 @@ function productCost(product) {
 }
 
 function maxSellableUnits(product) {
+  if (!product.recipe.length) {
+    return 0;
+  }
   return Math.floor(Math.min(...product.recipe.map((line) => {
     const ingredient = findIngredient(line.ingredientId);
     return ingredient ? ingredient.stock / line.quantity : 0;
@@ -464,6 +546,18 @@ function checkAvailability(product, quantity) {
     }
   }
   return { ok: true };
+}
+
+function getCurrentUser() {
+  return state.users.find((user) => user.id === currentUserId && user.active);
+}
+
+function roleLabel(role) {
+  return {
+    admin: "Administrador",
+    ventas: "Ventas",
+    operacion: "Operacion"
+  }[role] || role;
 }
 
 function metric(label, value, help) {
@@ -490,11 +584,21 @@ function persistAndRender(message) {
 
 function loadState() {
   const stored = localStorage.getItem(STORAGE_KEY);
-  return stored ? JSON.parse(stored) : structuredClone(demoState);
+  return normalizeState(stored ? JSON.parse(stored) : structuredClone(blankState));
 }
 
 function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizeState(state)));
+}
+
+function normalizeState(value) {
+  return {
+    users: Array.isArray(value?.users) ? value.users : [],
+    ingredients: Array.isArray(value?.ingredients) ? value.ingredients : [],
+    products: Array.isArray(value?.products) ? value.products : [],
+    purchases: Array.isArray(value?.purchases) ? value.purchases : [],
+    sales: Array.isArray(value?.sales) ? value.sales : []
+  };
 }
 
 function findIngredient(id) {

@@ -15,6 +15,33 @@
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
+    <section class="auth-screen" id="authScreen">
+      <div class="auth-card">
+        <div class="brand auth-brand">
+          <div class="brand-mark" aria-hidden="true">B</div>
+          <div>
+            <strong>BurgerOps</strong>
+            <span id="authSubtitle">Acceso al negocio</span>
+          </div>
+        </div>
+
+        <form id="setupForm" class="auth-form" hidden>
+          <h1>Crear administrador</h1>
+          <p>La app esta en blanco. Crea el primer usuario para empezar a ingresar tus datos reales.</p>
+          <label>Nombre<input name="name" required placeholder="Administrador"></label>
+          <label>PIN de acceso<input name="pin" required minlength="4" inputmode="numeric" autocomplete="new-password" placeholder="Minimo 4 numeros"></label>
+          <button class="primary-button" type="submit">Crear y entrar</button>
+        </form>
+
+        <form id="loginForm" class="auth-form" hidden>
+          <h1>Ingresar</h1>
+          <label>Usuario<select name="userId" id="loginUser"></select></label>
+          <label>PIN<input name="pin" required inputmode="numeric" autocomplete="current-password" placeholder="Tu PIN"></label>
+          <button class="primary-button" type="submit">Entrar</button>
+        </form>
+      </div>
+    </section>
+
     <div class="app-shell">
       <aside class="sidebar" aria-label="Navegacion principal">
         <div class="brand">
@@ -31,6 +58,7 @@
           <button class="nav-item" data-view="recetas">Recetas</button>
           <button class="nav-item" data-view="ventas">Ventas</button>
           <button class="nav-item" data-view="reportes">Reportes</button>
+          <button class="nav-item" data-view="usuarios">Usuarios</button>
         </nav>
         <div class="sidebar-note">
           <span>Inventario valorizado</span>
@@ -46,7 +74,8 @@
           </div>
           <div class="topbar-actions">
             <button class="ghost-button install-button" id="installApp" type="button" hidden>Instalar app</button>
-            <button class="ghost-button" id="resetDemo" type="button">Restaurar demo</button>
+            <button class="ghost-button danger-button" id="clearBusinessData" type="button">Limpiar datos</button>
+            <button class="ghost-button" id="logoutButton" type="button">Salir</button>
             <button class="primary-button" id="quickSale" type="button">Nueva venta</button>
           </div>
         </header>
@@ -241,6 +270,43 @@
                 </div>
               </div>
               <div class="stack-list" id="shoppingSuggestions"></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="usuarios">
+          <div class="content-grid">
+            <form class="panel form-panel" id="userForm">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Accesos</p>
+                  <h2>Crear usuario</h2>
+                </div>
+              </div>
+              <label>Nombre<input name="name" required placeholder="Nombre del usuario"></label>
+              <label>Rol
+                <select name="role">
+                  <option value="admin">Administrador</option>
+                  <option value="ventas">Ventas</option>
+                  <option value="operacion">Operacion</option>
+                </select>
+              </label>
+              <label>PIN<input name="pin" required minlength="4" inputmode="numeric" autocomplete="new-password" placeholder="Minimo 4 numeros"></label>
+              <button class="primary-button" type="submit">Guardar usuario</button>
+            </form>
+            <article class="panel table-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Equipo</p>
+                  <h2>Usuarios activos</h2>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Usuario</th><th>Rol</th><th>Estado</th></tr></thead>
+                  <tbody id="usersTable"></tbody>
+                </table>
+              </div>
             </article>
           </div>
         </section>

@@ -36,6 +36,60 @@ button {
   cursor: pointer;
 }
 
+.hidden,
+[hidden] {
+  display: none !important;
+}
+
+.auth-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 22px;
+  background: linear-gradient(140deg, #211f1c 0%, #3a3029 50%, #c94f2d 100%);
+}
+
+.auth-card {
+  width: min(440px, 100%);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.24);
+  padding: 22px;
+}
+
+.auth-brand {
+  color: var(--ink);
+  padding: 0;
+  margin-bottom: 24px;
+}
+
+.auth-form {
+  display: grid;
+  gap: 14px;
+}
+
+.auth-form h1 {
+  margin: 0;
+  font-size: 28px;
+  letter-spacing: 0;
+}
+
+.auth-form p {
+  margin: -4px 0 4px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.app-shell.locked {
+  filter: blur(2px);
+  pointer-events: none;
+  user-select: none;
+}
+
 .app-shell {
   display: grid;
   grid-template-columns: 280px 1fr;
@@ -187,6 +241,10 @@ button {
   background: var(--surface);
   color: var(--ink);
   border-color: var(--line);
+}
+
+.danger-button {
+  color: var(--red);
 }
 
 .view {
@@ -524,6 +582,10 @@ th {
   content: "P";
 }
 
+.nav-item[data-view="usuarios"]::before {
+  content: "U";
+}
+
 @media (display-mode: standalone), (min-width: 761px) {
   .install-button {
     display: none;
@@ -567,7 +629,7 @@ th {
   }
 
   .nav-list {
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(7, 1fr);
     gap: 4px;
   }
 
@@ -781,7 +843,7 @@ th {
 
 @media (max-width: 390px) {
   .nav-item {
-    font-size: 9px;
+    font-size: 8px;
   }
 
   .topbar-actions {
