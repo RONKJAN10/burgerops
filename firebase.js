@@ -1,31 +1,30 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 
 import {
-  getFirestore,
-  doc,
-  setDoc,
-  getDoc,
-  onSnapshot
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  getDatabase,
+  ref,
+  set,
+  onValue
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyC6KvnMH53ggmXt7WMYsaMPgJObyKNtdUE",
-  authDomain: "burgerops-caede.firebaseapp.com",
-  databaseURL: "https://burgerops-caede-default-rtdb.firebaseio.com",
-  projectId: "burgerops-caede",
-  storageBucket: "burgerops-caede.firebasestorage.app",
-  messagingSenderId: "260693684282",
-  appId: "1:260693684282:web:b247cf1c968282cda98503",
-  measurementId: "G-5JV7DGMTSD"
+  apiKey: "AIzaSyBAtKHHsJ52ZYPMb8ySQaozlSWfR-j8aKQ",
+  authDomain: "burgerops-f1fa2.firebaseapp.com",
+  databaseURL: "https://burgerops-f1fa2-default-rtdb.firebaseio.com/",
+  projectId: "burgerops-f1fa2",
+  storageBucket: "burgerops-f1fa2.firebasestorage.app",
+  messagingSenderId: "875427365546",
+  appId: "1:875427365546:web:4917a08ee88b5345f906d3",
+  measurementId: "G-CW21YB06DC"
 };
 
 const app = initializeApp(firebaseConfig);
 
-export const db = getFirestore(app);
+const database = getDatabase(app);
 
 export {
-  doc,
-  setDoc,
-  getDoc,
-  onSnapshot
+  database,
+  ref,
+  set,
+  onValue
 };
