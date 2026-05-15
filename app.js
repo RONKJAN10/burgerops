@@ -1,3 +1,9 @@
+import {
+  database,
+  ref,
+  set,
+  onValue
+} from "./firebase.js";
 const STORAGE_KEY = "burgerops-state-v2";
 const SESSION_KEY = "burgerops-session-v1";
 
