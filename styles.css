@@ -121,6 +121,19 @@ button {
   background: var(--accent);
   color: #fff8ed;
   font-weight: 900;
+  overflow: hidden;
+}
+
+.brand-mark.large {
+  width: 58px;
+  height: 58px;
+  font-size: 22px;
+}
+
+.brand-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .brand strong,
@@ -245,6 +258,43 @@ button {
 
 .danger-button {
   color: var(--red);
+}
+
+.button-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.logo-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  padding: 12px;
+}
+
+.logo-preview strong,
+.logo-preview span {
+  display: block;
+}
+
+.logo-preview span,
+.panel-copy {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.panel-copy {
+  margin: -4px 0 14px;
+}
+
+.restore-panel {
+  border-color: rgba(183, 53, 53, 0.28);
+  background: #fffafa;
 }
 
 .view {
