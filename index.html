@@ -57,6 +57,8 @@
           <button class="nav-item" data-view="compras">Compras</button>
           <button class="nav-item" data-view="recetas">Recetas</button>
           <button class="nav-item" data-view="ventas">Ventas</button>
+          <button class="nav-item" data-view="caja">Caja</button>
+          <button class="nav-item" data-view="gastos">Gastos</button>
           <button class="nav-item" data-view="reportes">Reportes</button>
           <button class="nav-item" data-view="usuarios">Usuarios</button>
         </nav>
@@ -258,6 +260,7 @@
                 </select>
               </label>
               <button class="primary-button" type="submit">Cobrar venta</button>
+              <button class="ghost-button" id="printLastTicket" type="button">Imprimir ultimo ticket</button>
               <p class="form-hint" id="saleHint"></p>
             </form>
             <article class="panel table-panel">
@@ -277,6 +280,77 @@
           </div>
         </section>
 
+        <section class="view" id="caja">
+          <div class="content-grid">
+            <form class="panel form-panel" id="shiftForm">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Turno</p>
+                  <h2 id="shiftFormTitle">Abrir caja</h2>
+                </div>
+              </div>
+              <label>Monto inicial S/<input name="openingCash" type="number" min="0" step="0.01" placeholder="0.00"></label>
+              <label>Monto contado al cierre S/<input name="closingCash" type="number" min="0" step="0.01" placeholder="Solo al cerrar"></label>
+              <label>Notas<input name="notes" placeholder="Observaciones del turno"></label>
+              <button class="primary-button" id="shiftSubmit" type="submit">Abrir turno</button>
+            </form>
+            <article class="panel table-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Cierres</p>
+                  <h2>Historial de caja</h2>
+                </div>
+              </div>
+              <div class="stack-list" id="shiftSummary"></div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Turno</th><th>Usuario</th><th>Ventas</th><th>Gastos</th><th>Esperado</th><th>Estado</th></tr></thead>
+                  <tbody id="shiftsTable"></tbody>
+                </table>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="gastos">
+          <div class="content-grid">
+            <form class="panel form-panel" id="expenseForm">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Egresos</p>
+                  <h2>Registrar gasto</h2>
+                </div>
+              </div>
+              <label>Concepto<input name="concept" required placeholder="Gas, delivery, movilidad"></label>
+              <label>Categoria
+                <select name="category">
+                  <option>Operacion</option>
+                  <option>Servicios</option>
+                  <option>Personal</option>
+                  <option>Delivery</option>
+                  <option>Otros</option>
+                </select>
+              </label>
+              <label>Monto S/<input name="amount" type="number" min="0.01" step="0.01" required></label>
+              <button class="primary-button" type="submit">Guardar gasto</button>
+            </form>
+            <article class="panel table-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Historial</p>
+                  <h2>Gastos recientes</h2>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Fecha</th><th>Concepto</th><th>Categoria</th><th>Monto</th><th>Usuario</th></tr></thead>
+                  <tbody id="expensesTable"></tbody>
+                </table>
+              </div>
+            </article>
+          </div>
+        </section>
+
         <section class="view" id="reportes">
           <div class="dashboard-grid">
             <article class="panel wide">
@@ -287,6 +361,12 @@
                 </div>
               </div>
               <div class="report-grid" id="reportGrid"></div>
+              <div class="button-row report-actions">
+                <button class="ghost-button" id="exportSales" type="button">Exportar ventas</button>
+                <button class="ghost-button" id="exportInventory" type="button">Exportar inventario</button>
+                <button class="ghost-button" id="exportExpenses" type="button">Exportar gastos</button>
+                <button class="ghost-button" id="exportClosings" type="button">Exportar cierres</button>
+              </div>
             </article>
             <article class="panel">
               <div class="panel-heading">

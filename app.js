@@ -10,7 +10,9 @@ const blankState = {
   ingredients: [],
   products: [],
   purchases: [],
-  sales: []
+  sales: [],
+  expenses: [],
+  shifts: []
 };
 
 let state = loadState();
@@ -23,6 +25,8 @@ const views = {
   compras: "Compras",
   recetas: "Recetas",
   ventas: "Ventas",
+  caja: "Caja",
+  gastos: "Gastos",
   reportes: "Reportes",
   usuarios: "Usuarios"
 };
@@ -85,6 +89,8 @@ function bindNavigation() {
     state.products = [];
     state.purchases = [];
     state.sales = [];
+    state.expenses = [];
+    state.shifts = [];
     saveState();
     renderAll();
     showToast("Datos del negocio limpiados.");
@@ -230,6 +236,12 @@ function bindForms() {
       showToast("Primero crea un producto con receta.");
       return;
     }
+    const activeShift = getActiveShift();
+    if (!activeShift) {
+      showToast("Abre caja antes de registrar ventas.");
+      showView("caja");
+      return;
+    }
     const quantity = Number(data.quantity);
     const availability = checkAvailability(product, quantity);
 
@@ -250,7 +262,9 @@ function bindForms() {
       quantity,
       channel: data.channel,
       total: product.price * quantity,
-      cost: unitCost * quantity
+      cost: unitCost * quantity,
+      shiftId: activeShift.id,
+      userId: currentUserId
     });
 
     form.reset();
@@ -259,6 +273,66 @@ function bindForms() {
   });
 
   document.getElementById("saleProduct").addEventListener("change", renderSaleHint);
+  document.getElementById("printLastTicket").addEventListener("click", () => printTicket(state.sales[0]));
+
+  document.getElementById("shiftForm").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = Object.fromEntries(new FormData(form));
+    const activeShift = getActiveShift();
+    if (activeShift) {
+      activeShift.closedAt = new Date().toISOString();
+      activeShift.closingCash = Number(data.closingCash || 0);
+      activeShift.notes = data.notes.trim();
+      saveState();
+      form.reset();
+      renderAll();
+      showToast("Turno cerrado.");
+      return;
+    }
+    state.shifts.unshift({
+      id: makeId("shift"),
+      openedAt: new Date().toISOString(),
+      closedAt: "",
+      openingCash: Number(data.openingCash || 0),
+      closingCash: 0,
+      notes: data.notes.trim(),
+      userId: currentUserId
+    });
+    saveState();
+    form.reset();
+    renderAll();
+    showToast("Caja abierta.");
+  });
+
+  document.getElementById("expenseForm").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const activeShift = getActiveShift();
+    if (!activeShift) {
+      showToast("Abre caja antes de registrar gastos.");
+      showView("caja");
+      return;
+    }
+    const form = event.currentTarget;
+    const data = Object.fromEntries(new FormData(form));
+    state.expenses.unshift({
+      id: makeId("exp"),
+      date: todayISO(),
+      createdAt: new Date().toISOString(),
+      concept: data.concept.trim(),
+      category: data.category,
+      amount: Number(data.amount),
+      shiftId: activeShift.id,
+      userId: currentUserId
+    });
+    form.reset();
+    persistAndRender("Gasto registrado.");
+  });
+
+  document.getElementById("exportSales").addEventListener("click", () => exportSales());
+  document.getElementById("exportInventory").addEventListener("click", () => exportInventory());
+  document.getElementById("exportExpenses").addEventListener("click", () => exportExpenses());
+  document.getElementById("exportClosings").addEventListener("click", () => exportClosings());
 
   document.getElementById("brandForm").addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -333,6 +407,8 @@ function renderAll() {
   renderRecipeBuilder();
   renderProducts();
   renderSales();
+  renderShifts();
+  renderExpenses();
   renderReports();
   renderUsers();
   renderSaleHint();
@@ -381,6 +457,7 @@ function renderMetrics() {
   const salesToday = state.sales.filter((sale) => sale.date === todayISO());
   const revenueToday = sum(salesToday, "total");
   const revenueTotal = sum(state.sales, "total");
+  const expensesToday = sum(state.expenses.filter((expense) => expense.date === todayISO()), "amount");
   const costToday = sum(salesToday, "cost");
   const grossMargin = revenueTotal ? ((revenueTotal - sum(state.sales, "cost")) / revenueTotal) * 100 : 0;
   const inventoryValue = state.ingredients.reduce((total, item) => total + item.stock * item.cost, 0);
@@ -390,7 +467,7 @@ function renderMetrics() {
   document.getElementById("sidebarInventory").textContent = money(inventoryValue);
   document.getElementById("metricsGrid").innerHTML = [
     metric("Ventas hoy", money(revenueToday), `${sum(salesToday, "quantity")} productos vendidos`, revenueToday > 0 ? "ok" : "neutral"),
-    metric("Utilidad hoy", money(revenueToday - costToday), `${salesToday.length} tickets emitidos`, revenueToday - costToday > 0 ? "ok" : "neutral"),
+    metric("Caja neta hoy", money(revenueToday - expensesToday), `Gastos ${money(expensesToday)}`, revenueToday - expensesToday > 0 ? "ok" : "neutral"),
     metric("Ticket promedio", money(averageTicket), "Promedio del dia", averageTicket > 0 ? "info" : "neutral"),
     metric("Stock critico", critical, critical === 1 ? "1 insumo por reponer" : `${critical} insumos por reponer`, critical > 0 ? "bad" : "ok")
   ].join("");
@@ -440,6 +517,7 @@ function renderTodaySummary() {
   const salesToday = state.sales.filter((sale) => sale.date === todayISO());
   const revenue = sum(salesToday, "total");
   const cost = sum(salesToday, "cost");
+  const expenses = sum(state.expenses.filter((expense) => expense.date === todayISO()), "amount");
   const units = sum(salesToday, "quantity");
   const margin = revenue ? ((revenue - cost) / revenue) * 100 : 0;
   const lastSale = salesToday[0];
@@ -447,6 +525,7 @@ function renderTodaySummary() {
 
   document.getElementById("todaySummary").innerHTML = [
     listRow("Ingresos", `${units} unidades vendidas`, money(revenue), revenue > 0 ? "ok" : "warn"),
+    listRow("Gastos", "Egresos del dia", money(expenses), expenses > 0 ? "warn" : "ok"),
     listRow("Margen del dia", `${margin.toFixed(1)}% sobre ventas`, money(revenue - cost), margin >= 45 ? "ok" : margin > 0 ? "warn" : "bad"),
     listRow("Ultima venta", lastProduct, lastSale ? money(lastSale.total) : "Pendiente", lastSale ? "info" : "warn")
   ].join("");
@@ -482,7 +561,10 @@ function renderNextActions(critical) {
     actions.push(actionCard("Crear recetas", "Configura productos para poder vender y descontar stock.", "recetas", "warn"));
   }
   if (state.products.length && !state.sales.length) {
-    actions.push(actionCard("Registrar primera venta", "Usa la caja para iniciar el historial del dia.", "ventas", "info"));
+    actions.push(actionCard("Abrir caja", "Inicia un turno antes de vender.", "caja", "info"));
+  }
+  if (getActiveShift()) {
+    actions.push(actionCard("Cerrar turno", "Cuenta efectivo y registra cierre de caja.", "caja", "warn"));
   }
   if (critical.length) {
     actions.push(actionCard("Reponer stock critico", `${critical.length} insumo(s) estan bajo el minimo.`, "compras", "bad"));
@@ -588,6 +670,57 @@ function renderSales() {
   }).join("") : `<tr><td data-label="Fecha"><strong>Sin ventas registradas</strong></td><td data-label="Siguiente paso">Crea productos y registra ventas.</td></tr>`;
 }
 
+function renderShifts() {
+  const activeShift = getActiveShift();
+  const form = document.getElementById("shiftForm");
+  document.getElementById("shiftFormTitle").textContent = activeShift ? "Cerrar caja" : "Abrir caja";
+  document.getElementById("shiftSubmit").textContent = activeShift ? "Cerrar turno" : "Abrir turno";
+  form.openingCash.disabled = Boolean(activeShift);
+  form.closingCash.disabled = !activeShift;
+  if (activeShift) {
+    form.openingCash.value = activeShift.openingCash;
+  }
+  const activeStats = activeShift ? shiftStats(activeShift.id) : null;
+  document.getElementById("shiftSummary").innerHTML = activeShift
+    ? [
+      listRow("Turno abierto", formatDateTime(activeShift.openedAt), money(activeStats.expectedCash), "info"),
+      listRow("Ventas del turno", `${activeStats.salesCount} tickets`, money(activeStats.salesTotal), "ok"),
+      listRow("Gastos del turno", "Egresos registrados", money(activeStats.expensesTotal), activeStats.expensesTotal > 0 ? "warn" : "ok")
+    ].join("")
+    : emptyRow("Sin turno abierto", "Abre caja para vender y registrar gastos.");
+
+  document.getElementById("shiftsTable").innerHTML = state.shifts.length ? state.shifts.map((shift) => {
+    const stats = shiftStats(shift.id);
+    const user = state.users.find((item) => item.id === shift.userId);
+    const status = shift.closedAt ? "Cerrado" : "Abierto";
+    return `
+      <tr>
+        <td data-label="Turno">${formatDateTime(shift.openedAt)}</td>
+        <td data-label="Usuario">${escapeHTML(user?.name || "Usuario")}</td>
+        <td data-label="Ventas">${money(stats.salesTotal)}</td>
+        <td data-label="Gastos">${money(stats.expensesTotal)}</td>
+        <td data-label="Esperado">${money(stats.expectedCash)}</td>
+        <td data-label="Estado"><span class="pill ${shift.closedAt ? "ok" : "info"}">${status}</span></td>
+      </tr>
+    `;
+  }).join("") : `<tr><td data-label="Turno"><strong>Sin cierres registrados</strong></td><td data-label="Siguiente paso">Abre tu primer turno.</td></tr>`;
+}
+
+function renderExpenses() {
+  document.getElementById("expensesTable").innerHTML = state.expenses.length ? state.expenses.map((expense) => {
+    const user = state.users.find((item) => item.id === expense.userId);
+    return `
+      <tr>
+        <td data-label="Fecha">${formatDate(expense.date)}</td>
+        <td data-label="Concepto"><strong>${escapeHTML(expense.concept)}</strong></td>
+        <td data-label="Categoria">${escapeHTML(expense.category)}</td>
+        <td data-label="Monto">${money(expense.amount)}</td>
+        <td data-label="Usuario">${escapeHTML(user?.name || "Usuario")}</td>
+      </tr>
+    `;
+  }).join("") : `<tr><td data-label="Fecha"><strong>Sin gastos registrados</strong></td><td data-label="Siguiente paso">Registra salidas de caja.</td></tr>`;
+}
+
 function renderUsers() {
   document.getElementById("usersTable").innerHTML = state.users.map((user) => `
     <tr>
@@ -610,6 +743,7 @@ function renderReports() {
   const revenue = sum(state.sales, "total");
   const cost = sum(state.sales, "cost");
   const purchases = sum(state.purchases, "total");
+  const expenses = sum(state.expenses, "amount");
   const tickets = state.sales.length;
   const averageTicket = tickets ? revenue / tickets : 0;
   const units = sum(state.sales, "quantity");
@@ -618,9 +752,10 @@ function renderReports() {
     reportCard("Ventas acumuladas", money(revenue), `${units} unidades`),
     reportCard("Costo vendido", money(cost), "Segun recetas"),
     reportCard("Utilidad bruta", money(revenue - cost), "Antes de gastos fijos"),
+    reportCard("Gastos", money(expenses), "Egresos registrados"),
     reportCard("Ticket promedio", money(averageTicket), `${tickets} tickets`),
     reportCard("Compras registradas", money(purchases), "Reposicion de insumos"),
-    reportCard("Productos activos", state.products.length, "Con receta configurada")
+    reportCard("Caja neta", money(revenue - expenses), "Ventas menos gastos")
   ].join("");
 
   const suggestions = state.ingredients
@@ -675,6 +810,24 @@ function checkAvailability(product, quantity) {
 
 function getCurrentUser() {
   return state.users.find((user) => user.id === currentUserId && user.active);
+}
+
+function getActiveShift() {
+  return state.shifts.find((shift) => !shift.closedAt);
+}
+
+function shiftStats(shiftId) {
+  const shift = state.shifts.find((item) => item.id === shiftId);
+  const sales = state.sales.filter((sale) => sale.shiftId === shiftId);
+  const expenses = state.expenses.filter((expense) => expense.shiftId === shiftId);
+  const salesTotal = sum(sales, "total");
+  const expensesTotal = sum(expenses, "amount");
+  return {
+    salesCount: sales.length,
+    salesTotal,
+    expensesTotal,
+    expectedCash: Number(shift?.openingCash || 0) + salesTotal - expensesTotal
+  };
 }
 
 function roleLabel(role) {
@@ -735,8 +888,71 @@ function normalizeState(value) {
     ingredients: Array.isArray(value?.ingredients) ? value.ingredients : [],
     products: Array.isArray(value?.products) ? value.products : [],
     purchases: Array.isArray(value?.purchases) ? value.purchases : [],
-    sales: Array.isArray(value?.sales) ? value.sales : []
+    sales: Array.isArray(value?.sales) ? value.sales : [],
+    expenses: Array.isArray(value?.expenses) ? value.expenses : [],
+    shifts: Array.isArray(value?.shifts) ? value.shifts : []
   };
+}
+
+function printTicket(sale) {
+  if (!sale) {
+    showToast("No hay ventas para imprimir.");
+    return;
+  }
+  const product = findProduct(sale.productId);
+  const user = state.users.find((item) => item.id === sale.userId);
+  const lines = [
+    state.settings.businessName,
+    "Ticket de venta",
+    `Fecha: ${formatDate(sale.date)}`,
+    `Producto: ${product?.name || "Producto"}`,
+    `Cantidad: ${sale.quantity}`,
+    `Canal: ${sale.channel}`,
+    `Total: ${money(sale.total)}`,
+    `Atendido por: ${user?.name || "Usuario"}`,
+    "Gracias por su compra"
+  ];
+  const win = window.open("", "_blank", "width=320,height=600");
+  if (!win) {
+    showToast("Permite ventanas emergentes para imprimir.");
+    return;
+  }
+  win.document.write(`<pre style="font:16px monospace;white-space:pre-wrap">${escapeHTML(lines.join("\n"))}</pre>`);
+  win.document.close();
+  win.print();
+}
+
+function exportSales() {
+  downloadCSV("ventas.csv", [["fecha", "producto", "cantidad", "canal", "total", "costo", "margen"], ...state.sales.map((sale) => {
+    const product = findProduct(sale.productId);
+    return [sale.date, product?.name || "", sale.quantity, sale.channel, sale.total, sale.cost, sale.total - sale.cost];
+  })]);
+}
+
+function exportInventory() {
+  downloadCSV("inventario.csv", [["insumo", "unidad", "stock", "minimo", "costo_unitario", "valor"], ...state.ingredients.map((item) => [item.name, item.unit, item.stock, item.minStock, item.cost, item.stock * item.cost])]);
+}
+
+function exportExpenses() {
+  downloadCSV("gastos.csv", [["fecha", "concepto", "categoria", "monto"], ...state.expenses.map((expense) => [expense.date, expense.concept, expense.category, expense.amount])]);
+}
+
+function exportClosings() {
+  downloadCSV("cierres-caja.csv", [["apertura", "cierre", "usuario", "inicial", "ventas", "gastos", "esperado", "contado"], ...state.shifts.map((shift) => {
+    const stats = shiftStats(shift.id);
+    const user = state.users.find((item) => item.id === shift.userId);
+    return [shift.openedAt, shift.closedAt, user?.name || "", shift.openingCash, stats.salesTotal, stats.expensesTotal, stats.expectedCash, shift.closingCash];
+  })]);
+}
+
+function downloadCSV(filename, rows) {
+  const csv = rows.map((row) => row.map((value) => `"${String(value ?? "").replaceAll('"', '""')}"`).join(",")).join("\n");
+  const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(link.href);
 }
 
 function fileToDataURL(file) {
@@ -794,6 +1010,13 @@ function makeId(prefix) {
 
 function formatDate(value) {
   return new Date(`${value}T00:00:00`).toLocaleDateString("es-PE", { day: "2-digit", month: "short" });
+}
+
+function formatDateTime(value) {
+  if (!value) {
+    return "";
+  }
+  return new Date(value).toLocaleString("es-PE", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
 function shortDay(value) {

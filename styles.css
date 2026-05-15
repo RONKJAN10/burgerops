@@ -685,6 +685,10 @@ th {
   font-size: 26px;
 }
 
+.report-actions {
+  margin-top: 16px;
+}
+
 .toast {
   position: fixed;
   right: 24px;
@@ -746,6 +750,14 @@ th {
   content: "V";
 }
 
+.nav-item[data-view="caja"]::before {
+  content: "$";
+}
+
+.nav-item[data-view="gastos"]::before {
+  content: "G";
+}
+
 .nav-item[data-view="reportes"]::before {
   content: "P";
 }
@@ -805,8 +817,15 @@ th {
   }
 
   .nav-list {
-    grid-template-columns: repeat(7, 1fr);
+    grid-template-columns: repeat(9, minmax(54px, 1fr));
     gap: 4px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  .nav-list::-webkit-scrollbar {
+    display: none;
   }
 
   .nav-item {
