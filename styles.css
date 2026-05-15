@@ -260,6 +260,19 @@ button {
   color: var(--red);
 }
 
+.small-button {
+  min-height: 34px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .button-row {
   display: grid;
   grid-template-columns: 1fr 1fr;

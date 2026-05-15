@@ -23,7 +23,7 @@ const views = {
   dashboard: "Dashboard",
   insumos: "Insumos",
   compras: "Compras",
-  recetas: "Recetas",
+  recetas: "Productos",
   ventas: "Ventas",
   caja: "Caja",
   gastos: "Gastos",
@@ -81,7 +81,7 @@ function bindNavigation() {
     bootApp();
   });
   document.getElementById("clearBusinessData").addEventListener("click", () => {
-    const confirmed = window.confirm("Esto borrara insumos, compras, recetas y ventas. Los usuarios y el logo se conservaran. Deseas continuar?");
+    const confirmed = window.confirm("Esto borrara insumos, compras, productos, ventas, caja y gastos. Los usuarios y el logo se conservaran. Deseas continuar?");
     if (!confirmed) {
       return;
     }
@@ -193,38 +193,17 @@ function bindForms() {
     persistAndRender("Compra registrada y stock actualizado.");
   });
 
-  document.getElementById("addRecipeLine").addEventListener("click", () => addRecipeLine());
-
   document.getElementById("recipeForm").addEventListener("submit", (event) => {
     event.preventDefault();
-    if (!state.ingredients.length) {
-      showToast("Primero registra insumos para crear recetas.");
-      return;
-    }
     const form = event.currentTarget;
     const data = Object.fromEntries(new FormData(form));
-    const rows = [...document.querySelectorAll(".recipe-line")];
-    const recipe = rows
-      .map((row) => ({
-        ingredientId: row.querySelector("select").value,
-        quantity: Number(row.querySelector("input").value)
-      }))
-      .filter((line) => line.ingredientId && line.quantity > 0);
-
-    if (!recipe.length) {
-      showToast("Agrega al menos un insumo a la receta.");
-      return;
-    }
-
     state.products.push({
       id: makeId("prod"),
       name: data.name.trim(),
-      price: Number(data.price),
-      recipe
+      price: Number(data.price)
     });
     form.reset();
-    renderRecipeBuilder();
-    persistAndRender("Receta guardada.");
+    persistAndRender("Producto guardado.");
   });
 
   document.getElementById("saleForm").addEventListener("submit", (event) => {
@@ -233,7 +212,7 @@ function bindForms() {
     const data = Object.fromEntries(new FormData(form));
     const product = findProduct(data.productId);
     if (!product) {
-      showToast("Primero crea un producto con receta.");
+      showToast("Primero crea un producto.");
       return;
     }
     const activeShift = getActiveShift();
@@ -243,18 +222,6 @@ function bindForms() {
       return;
     }
     const quantity = Number(data.quantity);
-    const availability = checkAvailability(product, quantity);
-
-    if (!availability.ok) {
-      showToast(`Stock insuficiente: ${availability.name}.`);
-      return;
-    }
-
-    product.recipe.forEach((line) => {
-      findIngredient(line.ingredientId).stock -= line.quantity * quantity;
-    });
-
-    const unitCost = productCost(product);
     state.sales.unshift({
       id: makeId("sale"),
       date: todayISO(),
@@ -262,14 +229,14 @@ function bindForms() {
       quantity,
       channel: data.channel,
       total: product.price * quantity,
-      cost: unitCost * quantity,
+      cost: 0,
       shiftId: activeShift.id,
       userId: currentUserId
     });
 
     form.reset();
     form.quantity.value = 1;
-    persistAndRender("Venta registrada y stock descontado.");
+    persistAndRender("Venta registrada.");
   });
 
   document.getElementById("saleProduct").addEventListener("change", renderSaleHint);
@@ -404,7 +371,6 @@ function renderAll() {
   renderDashboard();
   renderIngredients();
   renderPurchases();
-  renderRecipeBuilder();
   renderProducts();
   renderSales();
   renderShifts();
@@ -557,8 +523,8 @@ function renderNextActions(critical) {
   if (!state.ingredients.length) {
     actions.push(actionCard("Registrar insumos", "Empieza por carne, pan, queso, salsas y empaques.", "insumos", "bad"));
   }
-  if (state.ingredients.length && !state.products.length) {
-    actions.push(actionCard("Crear recetas", "Configura productos para poder vender y descontar stock.", "recetas", "warn"));
+  if (!state.products.length) {
+    actions.push(actionCard("Crear productos", "Agrega los nombres y precios de tu carta.", "recetas", "warn"));
   }
   if (state.products.length && !state.sales.length) {
     actions.push(actionCard("Abrir caja", "Inicia un turno antes de vender.", "caja", "info"));
@@ -607,51 +573,31 @@ function renderPurchases() {
         <td data-label="Insumo">${escapeHTML(ingredient?.name || "Insumo eliminado")}</td>
         <td data-label="Cantidad">${round(purchase.quantity)} ${ingredient?.unit || ""}</td>
         <td data-label="Total">${money(purchase.total)}</td>
+        <td data-label="Acciones"><div class="row-actions"><button class="ghost-button small-button" type="button" onclick="editPurchase('${purchase.id}')">Modificar</button><button class="ghost-button small-button danger-button" type="button" onclick="deletePurchase('${purchase.id}')">Eliminar</button></div></td>
       </tr>
     `;
   }).join("") : `<tr><td data-label="Fecha"><strong>Sin compras registradas</strong></td><td data-label="Siguiente paso">Registra entradas de inventario.</td></tr>`;
 }
 
-function renderRecipeBuilder() {
-  const builder = document.getElementById("recipeBuilder");
-  builder.innerHTML = "";
-  addRecipeLine();
-}
-
-function addRecipeLine() {
-  const builder = document.getElementById("recipeBuilder");
-  const line = document.createElement("div");
-  line.className = "recipe-line";
-  line.innerHTML = `
-    <select aria-label="Insumo de receta" ${state.ingredients.length ? "" : "disabled"}>${state.ingredients.map((ingredient) => `<option value="${ingredient.id}">${escapeHTML(ingredient.name)}</option>`).join("") || `<option value="">Sin insumos</option>`}</select>
-    <input aria-label="Cantidad por unidad" type="number" min="0.01" step="0.01" placeholder="Cant.">
-    <button class="icon-button" type="button" title="Quitar linea">x</button>
-  `;
-  line.querySelector("button").addEventListener("click", () => line.remove());
-  builder.appendChild(line);
-}
-
 function renderProducts() {
   document.getElementById("productsList").innerHTML = state.products.length ? state.products.map((product) => {
-    const cost = productCost(product);
-    const margin = product.price ? ((product.price - cost) / product.price) * 100 : 0;
-    const detail = product.recipe.map((line) => {
-      const ingredient = findIngredient(line.ingredientId);
-      return `${round(line.quantity)} ${ingredient?.unit || ""} ${ingredient?.name || ""}`;
-    }).join(" / ");
     return `
       <div class="product-card">
         <div>
           <strong>${escapeHTML(product.name)}</strong>
-          <span>${escapeHTML(detail)}</span>
+          <span>Producto de venta</span>
         </div>
         <div>
           <strong>${money(product.price)}</strong>
-          <span>Costo ${money(cost)} / margen ${margin.toFixed(1)}%</span>
+          <span>Precio de carta</span>
+        </div>
+        <div class="row-actions">
+          <button class="ghost-button small-button" type="button" onclick="editProduct('${product.id}')">Modificar</button>
+          <button class="ghost-button small-button danger-button" type="button" onclick="deleteProduct('${product.id}')">Eliminar</button>
         </div>
       </div>
     `;
-  }).join("") : emptyRow("Sin productos configurados", "Crea recetas cuando tengas insumos registrados.");
+  }).join("") : emptyRow("Sin productos registrados", "Agrega los nombres y precios de tu carta.");
 }
 
 function renderSales() {
@@ -665,6 +611,7 @@ function renderSales() {
         <td data-label="Canal">${sale.channel}</td>
         <td data-label="Total">${money(sale.total)}</td>
         <td data-label="Margen">${money(sale.total - sale.cost)}</td>
+        <td data-label="Acciones"><div class="row-actions"><button class="ghost-button small-button" type="button" onclick="editSale('${sale.id}')">Modificar</button><button class="ghost-button small-button danger-button" type="button" onclick="deleteSale('${sale.id}')">Eliminar</button></div></td>
       </tr>
     `;
   }).join("") : `<tr><td data-label="Fecha"><strong>Sin ventas registradas</strong></td><td data-label="Siguiente paso">Crea productos y registra ventas.</td></tr>`;
@@ -701,6 +648,7 @@ function renderShifts() {
         <td data-label="Gastos">${money(stats.expensesTotal)}</td>
         <td data-label="Esperado">${money(stats.expectedCash)}</td>
         <td data-label="Estado"><span class="pill ${shift.closedAt ? "ok" : "info"}">${status}</span></td>
+        <td data-label="Acciones"><div class="row-actions"><button class="ghost-button small-button" type="button" onclick="editShift('${shift.id}')">Modificar</button><button class="ghost-button small-button danger-button" type="button" onclick="deleteShift('${shift.id}')">Eliminar</button></div></td>
       </tr>
     `;
   }).join("") : `<tr><td data-label="Turno"><strong>Sin cierres registrados</strong></td><td data-label="Siguiente paso">Abre tu primer turno.</td></tr>`;
@@ -716,6 +664,7 @@ function renderExpenses() {
         <td data-label="Categoria">${escapeHTML(expense.category)}</td>
         <td data-label="Monto">${money(expense.amount)}</td>
         <td data-label="Usuario">${escapeHTML(user?.name || "Usuario")}</td>
+        <td data-label="Acciones"><div class="row-actions"><button class="ghost-button small-button" type="button" onclick="editExpense('${expense.id}')">Modificar</button><button class="ghost-button small-button danger-button" type="button" onclick="deleteExpense('${expense.id}')">Eliminar</button></div></td>
       </tr>
     `;
   }).join("") : `<tr><td data-label="Fecha"><strong>Sin gastos registrados</strong></td><td data-label="Siguiente paso">Registra salidas de caja.</td></tr>`;
@@ -750,7 +699,7 @@ function renderReports() {
 
   document.getElementById("reportGrid").innerHTML = [
     reportCard("Ventas acumuladas", money(revenue), `${units} unidades`),
-    reportCard("Costo vendido", money(cost), "Segun recetas"),
+    reportCard("Costo vendido", money(cost), "Sin receta configurada"),
     reportCard("Utilidad bruta", money(revenue - cost), "Antes de gastos fijos"),
     reportCard("Gastos", money(expenses), "Egresos registrados"),
     reportCard("Ticket promedio", money(averageTicket), `${tickets} tickets`),
@@ -776,36 +725,15 @@ function renderSaleHint() {
     hint.textContent = "Configura un producto para empezar a vender.";
     return;
   }
-  const cost = productCost(product);
-  const maxUnits = maxSellableUnits(product);
-  hint.textContent = `Precio ${money(product.price)} | costo ${money(cost)} | maximo vendible con stock actual: ${maxUnits}`;
+  hint.textContent = `Precio ${money(product.price)} | producto listo para venta`;
 }
 
 function productCost(product) {
-  return product.recipe.reduce((total, line) => {
-    const ingredient = findIngredient(line.ingredientId);
-    return total + (ingredient ? ingredient.cost * line.quantity : 0);
-  }, 0);
+  return 0;
 }
 
 function maxSellableUnits(product) {
-  if (!product.recipe.length) {
-    return 0;
-  }
-  return Math.floor(Math.min(...product.recipe.map((line) => {
-    const ingredient = findIngredient(line.ingredientId);
-    return ingredient ? ingredient.stock / line.quantity : 0;
-  })));
-}
-
-function checkAvailability(product, quantity) {
-  for (const line of product.recipe) {
-    const ingredient = findIngredient(line.ingredientId);
-    if (!ingredient || ingredient.stock < line.quantity * quantity) {
-      return { ok: false, name: ingredient?.name || "insumo faltante" };
-    }
-  }
-  return { ok: true };
+  return 0;
 }
 
 function getCurrentUser() {
@@ -861,6 +789,160 @@ function actionCard(title, detail, view, tone) {
       <span>${escapeHTML(detail)}</span>
     </button>
   `;
+}
+
+function requireAdminPin() {
+  const pin = window.prompt("Ingresa PIN de administrador para continuar:");
+  if (pin === null) {
+    return false;
+  }
+  const ok = state.users.some((user) => user.active && user.role === "admin" && user.pin === pin.trim());
+  if (!ok) {
+    showToast("PIN de administrador incorrecto.");
+  }
+  return ok;
+}
+
+function editProduct(id) {
+  if (!requireAdminPin()) return;
+  const product = findProduct(id);
+  if (!product) return;
+  const name = window.prompt("Nombre del producto:", product.name);
+  if (!name) return;
+  const price = Number(window.prompt("Precio de venta S/:", product.price));
+  if (!Number.isFinite(price) || price < 0) {
+    showToast("Precio invalido.");
+    return;
+  }
+  product.name = name.trim();
+  product.price = price;
+  state.sales.forEach((sale) => {
+    if (sale.productId === product.id) {
+      sale.total = product.price * sale.quantity;
+    }
+  });
+  persistAndRender("Producto modificado.");
+}
+
+function deleteProduct(id) {
+  if (!requireAdminPin()) return;
+  if (!window.confirm("Eliminar este producto? Las ventas antiguas conservaran el registro, pero el producto ya no estara disponible.")) return;
+  state.products = state.products.filter((product) => product.id !== id);
+  persistAndRender("Producto eliminado.");
+}
+
+function editPurchase(id) {
+  if (!requireAdminPin()) return;
+  const purchase = state.purchases.find((item) => item.id === id);
+  if (!purchase) return;
+  const oldIngredient = findIngredient(purchase.ingredientId);
+  const supplier = window.prompt("Proveedor:", purchase.supplier);
+  if (!supplier) return;
+  const quantity = Number(window.prompt("Cantidad:", purchase.quantity));
+  const total = Number(window.prompt("Costo total S/:", purchase.total));
+  if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(total) || total < 0) {
+    showToast("Datos de compra invalidos.");
+    return;
+  }
+  if (oldIngredient) {
+    oldIngredient.stock -= purchase.quantity;
+    oldIngredient.stock += quantity;
+    oldIngredient.cost = total / quantity;
+  }
+  purchase.supplier = supplier.trim();
+  purchase.quantity = quantity;
+  purchase.total = total;
+  persistAndRender("Compra modificada.");
+}
+
+function deletePurchase(id) {
+  if (!requireAdminPin()) return;
+  const purchase = state.purchases.find((item) => item.id === id);
+  if (!purchase) return;
+  if (!window.confirm("Eliminar esta compra y descontar su cantidad del stock?")) return;
+  const ingredient = findIngredient(purchase.ingredientId);
+  if (ingredient) {
+    ingredient.stock = Math.max(0, ingredient.stock - purchase.quantity);
+  }
+  state.purchases = state.purchases.filter((item) => item.id !== id);
+  persistAndRender("Compra eliminada.");
+}
+
+function editSale(id) {
+  if (!requireAdminPin()) return;
+  const sale = state.sales.find((item) => item.id === id);
+  if (!sale) return;
+  const product = findProduct(sale.productId);
+  const quantity = Number(window.prompt("Cantidad:", sale.quantity));
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    showToast("Cantidad invalida.");
+    return;
+  }
+  const channel = window.prompt("Canal: Salon, Delivery o Recojo", sale.channel);
+  if (!channel) return;
+  sale.quantity = quantity;
+  sale.channel = channel.trim();
+  sale.total = (product?.price || 0) * quantity;
+  sale.cost = 0;
+  persistAndRender("Venta modificada.");
+}
+
+function deleteSale(id) {
+  if (!requireAdminPin()) return;
+  if (!window.confirm("Eliminar esta venta?")) return;
+  state.sales = state.sales.filter((sale) => sale.id !== id);
+  persistAndRender("Venta eliminada.");
+}
+
+function editShift(id) {
+  if (!requireAdminPin()) return;
+  const shift = state.shifts.find((item) => item.id === id);
+  if (!shift) return;
+  const openingCash = Number(window.prompt("Monto inicial S/:", shift.openingCash));
+  const closingCash = Number(window.prompt("Monto contado al cierre S/:", shift.closingCash || 0));
+  const notes = window.prompt("Notas:", shift.notes || "");
+  if (!Number.isFinite(openingCash) || openingCash < 0 || !Number.isFinite(closingCash) || closingCash < 0) {
+    showToast("Datos de caja invalidos.");
+    return;
+  }
+  shift.openingCash = openingCash;
+  shift.closingCash = closingCash;
+  shift.notes = notes || "";
+  persistAndRender("Caja modificada.");
+}
+
+function deleteShift(id) {
+  if (!requireAdminPin()) return;
+  const hasMoves = state.sales.some((sale) => sale.shiftId === id) || state.expenses.some((expense) => expense.shiftId === id);
+  if (hasMoves && !window.confirm("Este turno tiene ventas o gastos. Deseas eliminar solo el registro de caja?")) return;
+  state.shifts = state.shifts.filter((shift) => shift.id !== id);
+  persistAndRender("Caja eliminada.");
+}
+
+function editExpense(id) {
+  if (!requireAdminPin()) return;
+  const expense = state.expenses.find((item) => item.id === id);
+  if (!expense) return;
+  const concept = window.prompt("Concepto:", expense.concept);
+  if (!concept) return;
+  const category = window.prompt("Categoria:", expense.category);
+  if (!category) return;
+  const amount = Number(window.prompt("Monto S/:", expense.amount));
+  if (!Number.isFinite(amount) || amount <= 0) {
+    showToast("Monto invalido.");
+    return;
+  }
+  expense.concept = concept.trim();
+  expense.category = category.trim();
+  expense.amount = amount;
+  persistAndRender("Gasto modificado.");
+}
+
+function deleteExpense(id) {
+  if (!requireAdminPin()) return;
+  if (!window.confirm("Eliminar este gasto?")) return;
+  state.expenses = state.expenses.filter((expense) => expense.id !== id);
+  persistAndRender("Gasto eliminado.");
 }
 
 function persistAndRender(message) {
