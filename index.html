@@ -6,9 +6,9 @@
     <meta name="theme-color" content="#211f1c">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-title" content="BurgerOps">
+    <meta name="apple-mobile-web-app-title" content="MATARINA BURGER">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>BurgerOps | Gestion de hamburgueseria</title>
+    <title>MATARINA BURGER | Gestion de hamburgueseria</title>
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="icon.svg">
@@ -18,9 +18,9 @@
     <section class="auth-screen" id="authScreen">
       <div class="auth-card">
         <div class="brand auth-brand">
-          <div class="brand-mark" aria-hidden="true">B</div>
+          <div class="brand-mark" aria-hidden="true"><img class="brand-logo" alt="" hidden><span>M</span></div>
           <div>
-            <strong>BurgerOps</strong>
+            <strong data-brand-name>MATARINA BURGER</strong>
             <span id="authSubtitle">Acceso al negocio</span>
           </div>
         </div>
@@ -45,9 +45,9 @@
     <div class="app-shell">
       <aside class="sidebar" aria-label="Navegacion principal">
         <div class="brand">
-          <div class="brand-mark" aria-hidden="true">B</div>
+          <div class="brand-mark" aria-hidden="true"><img class="brand-logo" alt="" hidden><span>M</span></div>
           <div>
-            <strong>BurgerOps</strong>
+            <strong data-brand-name>MATARINA BURGER</strong>
             <span>Operacion diaria</span>
           </div>
         </div>
@@ -74,7 +74,6 @@
           </div>
           <div class="topbar-actions">
             <button class="ghost-button install-button" id="installApp" type="button" hidden>Instalar app</button>
-            <button class="ghost-button danger-button" id="clearBusinessData" type="button">Limpiar datos</button>
             <button class="ghost-button" id="logoutButton" type="button">Salir</button>
             <button class="primary-button" id="quickSale" type="button">Nueva venta</button>
           </div>
@@ -303,24 +302,58 @@
 
         <section class="view" id="usuarios">
           <div class="content-grid">
-            <form class="panel form-panel" id="userForm">
-              <div class="panel-heading">
-                <div>
-                  <p class="eyebrow">Accesos</p>
-                  <h2>Crear usuario</h2>
+            <div class="stack-list">
+              <form class="panel form-panel" id="brandForm">
+                <div class="panel-heading">
+                  <div>
+                    <p class="eyebrow">Marca</p>
+                    <h2>Logo del negocio</h2>
+                  </div>
                 </div>
-              </div>
-              <label>Nombre<input name="name" required placeholder="Nombre del usuario"></label>
-              <label>Rol
-                <select name="role">
-                  <option value="admin">Administrador</option>
-                  <option value="ventas">Ventas</option>
-                  <option value="operacion">Operacion</option>
-                </select>
-              </label>
-              <label>PIN<input name="pin" required minlength="4" inputmode="numeric" autocomplete="new-password" placeholder="Minimo 4 numeros"></label>
-              <button class="primary-button" type="submit">Guardar usuario</button>
-            </form>
+                <div class="logo-preview">
+                  <div class="brand-mark large"><img class="brand-logo" alt="" hidden><span>M</span></div>
+                  <div>
+                    <strong data-brand-name>MATARINA BURGER</strong>
+                    <span>Se mostrara en acceso y menu.</span>
+                  </div>
+                </div>
+                <label>Agregar logo<input name="logo" type="file" accept="image/*"></label>
+                <div class="button-row">
+                  <button class="primary-button" type="submit">Guardar logo</button>
+                  <button class="ghost-button" id="removeLogo" type="button">Quitar logo</button>
+                </div>
+              </form>
+
+              <form class="panel form-panel" id="userForm">
+                <div class="panel-heading">
+                  <div>
+                    <p class="eyebrow">Accesos</p>
+                    <h2>Crear usuario</h2>
+                  </div>
+                </div>
+                <label>Nombre<input name="name" required placeholder="Nombre del usuario"></label>
+                <label>Rol
+                  <select name="role">
+                    <option value="admin">Administrador</option>
+                    <option value="ventas">Ventas</option>
+                    <option value="operacion">Operacion</option>
+                  </select>
+                </label>
+                <label>PIN<input name="pin" required minlength="4" inputmode="numeric" autocomplete="new-password" placeholder="Minimo 4 numeros"></label>
+                <button class="primary-button" type="submit">Guardar usuario</button>
+              </form>
+
+              <article class="panel restore-panel" id="restorePanel">
+                <div class="panel-heading">
+                  <div>
+                    <p class="eyebrow">Restauracion</p>
+                    <h2>Restaurar todos los datos</h2>
+                  </div>
+                </div>
+                <p class="panel-copy">Borra insumos, compras, recetas y ventas. Los usuarios y el logo se conservaran.</p>
+                <button class="ghost-button danger-button" id="clearBusinessData" type="button">Restaurar todos los datos</button>
+              </article>
+            </div>
             <article class="panel table-panel">
               <div class="panel-heading">
                 <div>
