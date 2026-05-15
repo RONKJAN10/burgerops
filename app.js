@@ -4,7 +4,7 @@ import {
   set,
   onValue
 } from "./firebase.js";
-const STORAGE_KEY = "burgerops-state-v2";
+ = "burgerops-state-v2";
 const SESSION_KEY = "burgerops-session-v1";
 
 const blankState = {
@@ -23,7 +23,7 @@ const blankState = {
 
 let state = loadState();
 let deferredInstallPrompt = null;
-let currentUserId = localStorage.getItem(SESSION_KEY);
+let currentUserId = (SESSION_KEY);
 
 const views = {
   dashboard: "Dashboard",
@@ -42,6 +42,7 @@ document.addEventListener("DOMContentLoaded", () => {
   bindAuth();
   bindNavigation();
   bindForms();
+  loadState();
   bootApp();
 });
 
@@ -1007,13 +1008,46 @@ function persistAndRender(message) {
   showToast(message);
 }
 
-function loadState() {
-  const stored = localStorage.getItem(STORAGE_KEY);
-  return normalizeState(stored ? JSON.parse(stored) : structuredClone(blankState));
+async function saveState() {
+
+  try {
+
+    await set(
+      ref(database, "burgerops/state"),
+      normalizeState(state)
+    );
+
+    console.log("Datos sincronizados");
+
+  } catch (error) {
+
+    console.error(error);
+
+    showToast("Error sincronizando");
+
+  }
+
 }
 
-function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizeState(state)));
+async function saveState() {
+
+  try {
+
+    await set(
+      ref(database, "burgerops/state"),
+      normalizeState(state)
+    );
+
+    console.log("Datos sincronizados");
+
+  } catch (error) {
+
+    console.error(error);
+
+    showToast("Error sincronizando");
+
+  }
+
 }
 
 function normalizeState(value) {
