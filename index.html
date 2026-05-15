@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#211f1c">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="BurgerOps">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>BurgerOps | Gestion de hamburgueseria</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="icon.svg">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Navegacion principal">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">B</div>
+          <div>
+            <strong>BurgerOps</strong>
+            <span>Operacion diaria</span>
+          </div>
+        </div>
+        <nav class="nav-list" id="navList">
+          <button class="nav-item active" data-view="dashboard">Dashboard</button>
+          <button class="nav-item" data-view="insumos">Insumos</button>
+          <button class="nav-item" data-view="compras">Compras</button>
+          <button class="nav-item" data-view="recetas">Recetas</button>
+          <button class="nav-item" data-view="ventas">Ventas</button>
+          <button class="nav-item" data-view="reportes">Reportes</button>
+        </nav>
+        <div class="sidebar-note">
+          <span>Inventario valorizado</span>
+          <strong id="sidebarInventory">S/ 0.00</strong>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Control integral</p>
+            <h1 id="viewTitle">Dashboard</h1>
+          </div>
+          <div class="topbar-actions">
+            <button class="ghost-button install-button" id="installApp" type="button" hidden>Instalar app</button>
+            <button class="ghost-button" id="resetDemo" type="button">Restaurar demo</button>
+            <button class="primary-button" id="quickSale" type="button">Nueva venta</button>
+          </div>
+        </header>
+
+        <section class="view active" id="dashboard">
+          <div class="metrics-grid" id="metricsGrid"></div>
+          <div class="dashboard-grid">
+            <article class="panel wide">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Ventas</p>
+                  <h2>Rendimiento semanal</h2>
+                </div>
+                <span id="weekRange"></span>
+              </div>
+              <div class="bar-chart" id="salesChart" aria-label="Grafico de ventas semanales"></div>
+            </article>
+            <article class="panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Alerta</p>
+                  <h2>Stock critico</h2>
+                </div>
+              </div>
+              <div class="stack-list" id="criticalStock"></div>
+            </article>
+            <article class="panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Mix</p>
+                  <h2>Productos top</h2>
+                </div>
+              </div>
+              <div class="stack-list" id="topProducts"></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="insumos">
+          <div class="content-grid">
+            <form class="panel form-panel" id="ingredientForm">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Inventario</p>
+                  <h2>Registrar insumo</h2>
+                </div>
+              </div>
+              <label>Nombre<input name="name" required placeholder="Carne blend 80/20"></label>
+              <label>Unidad
+                <select name="unit">
+                  <option value="kg">kg</option>
+                  <option value="unidad">unidad</option>
+                  <option value="litro">litro</option>
+                  <option value="paquete">paquete</option>
+                </select>
+              </label>
+              <label>Stock actual<input name="stock" type="number" min="0" step="0.01" required></label>
+              <label>Stock minimo<input name="minStock" type="number" min="0" step="0.01" required></label>
+              <label>Costo unitario S/<input name="cost" type="number" min="0" step="0.01" required></label>
+              <button class="primary-button" type="submit">Guardar insumo</button>
+            </form>
+            <article class="panel table-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Existencias</p>
+                  <h2>Insumos disponibles</h2>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Insumo</th><th>Stock</th><th>Minimo</th><th>Costo</th><th>Estado</th></tr></thead>
+                  <tbody id="ingredientsTable"></tbody>
+                </table>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="compras">
+          <div class="content-grid">
+            <form class="panel form-panel" id="purchaseForm">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Compras</p>
+                  <h2>Entrada de insumos</h2>
+                </div>
+              </div>
+              <label>Proveedor<input name="supplier" required placeholder="Mercado / proveedor"></label>
+              <label>Insumo<select name="ingredientId" id="purchaseIngredient"></select></label>
+              <label>Cantidad<input name="quantity" type="number" min="0.01" step="0.01" required></label>
+              <label>Costo total S/<input name="total" type="number" min="0" step="0.01" required></label>
+              <button class="primary-button" type="submit">Registrar compra</button>
+            </form>
+            <article class="panel table-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Historial</p>
+                  <h2>Compras recientes</h2>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Fecha</th><th>Proveedor</th><th>Insumo</th><th>Cantidad</th><th>Total</th></tr></thead>
+                  <tbody id="purchasesTable"></tbody>
+                </table>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="recetas">
+          <div class="content-grid">
+            <form class="panel form-panel" id="recipeForm">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Produccion</p>
+                  <h2>Producto y receta</h2>
+                </div>
+              </div>
+              <label>Producto<input name="name" required placeholder="Cheeseburger clasica"></label>
+              <label>Precio de venta S/<input name="price" type="number" min="0" step="0.01" required></label>
+              <div class="recipe-builder" id="recipeBuilder"></div>
+              <button class="ghost-button" id="addRecipeLine" type="button">Agregar insumo</button>
+              <button class="primary-button" type="submit">Guardar receta</button>
+            </form>
+            <article class="panel table-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Carta</p>
+                  <h2>Productos configurados</h2>
+                </div>
+              </div>
+              <div class="cards-list" id="productsList"></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="ventas">
+          <div class="content-grid">
+            <form class="panel form-panel" id="saleForm">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Caja</p>
+                  <h2>Registrar venta</h2>
+                </div>
+              </div>
+              <label>Producto<select name="productId" id="saleProduct"></select></label>
+              <label>Cantidad<input name="quantity" type="number" min="1" step="1" value="1" required></label>
+              <label>Canal
+                <select name="channel">
+                  <option>Salon</option>
+                  <option>Delivery</option>
+                  <option>Recojo</option>
+                </select>
+              </label>
+              <button class="primary-button" type="submit">Cobrar venta</button>
+              <p class="form-hint" id="saleHint"></p>
+            </form>
+            <article class="panel table-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Movimientos</p>
+                  <h2>Ventas recientes</h2>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Fecha</th><th>Producto</th><th>Cant.</th><th>Canal</th><th>Total</th><th>Margen</th></tr></thead>
+                  <tbody id="salesTable"></tbody>
+                </table>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="reportes">
+          <div class="dashboard-grid">
+            <article class="panel wide">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Rentabilidad</p>
+                  <h2>Resumen del negocio</h2>
+                </div>
+              </div>
+              <div class="report-grid" id="reportGrid"></div>
+            </article>
+            <article class="panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Reposicion</p>
+                  <h2>Lista sugerida</h2>
+                </div>
+              </div>
+              <div class="stack-list" id="shoppingSuggestions"></div>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="app.js"></script>
+  </body>
+</html>

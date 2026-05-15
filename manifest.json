@@ -1,0 +1,19 @@
+{
+  "name": "BurgerOps - Gestion de hamburgueseria",
+  "short_name": "BurgerOps",
+  "description": "Aplicacion movil para compras, inventario, recetas, ventas y dashboard de una hamburgueseria.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f6f3ee",
+  "theme_color": "#211f1c",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
