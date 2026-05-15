@@ -326,16 +326,18 @@ function renderMetrics() {
   const salesToday = state.sales.filter((sale) => sale.date === todayISO());
   const revenueToday = sum(salesToday, "total");
   const revenueTotal = sum(state.sales, "total");
+  const costToday = sum(salesToday, "cost");
   const grossMargin = revenueTotal ? ((revenueTotal - sum(state.sales, "cost")) / revenueTotal) * 100 : 0;
   const inventoryValue = state.ingredients.reduce((total, item) => total + item.stock * item.cost, 0);
   const critical = state.ingredients.filter((item) => item.stock <= item.minStock).length;
+  const averageTicket = salesToday.length ? revenueToday / salesToday.length : 0;
 
   document.getElementById("sidebarInventory").textContent = money(inventoryValue);
   document.getElementById("metricsGrid").innerHTML = [
-    metric("Ventas hoy", money(revenueToday), `${sum(salesToday, "quantity")} productos vendidos`),
-    metric("Margen bruto", `${grossMargin.toFixed(1)}%`, "Sobre ventas registradas"),
-    metric("Inventario", money(inventoryValue), "Valor estimado en stock"),
-    metric("Alertas", critical, "Insumos en nivel critico")
+    metric("Ventas hoy", money(revenueToday), `${sum(salesToday, "quantity")} productos vendidos`, revenueToday > 0 ? "ok" : "neutral"),
+    metric("Utilidad hoy", money(revenueToday - costToday), `${salesToday.length} tickets emitidos`, revenueToday - costToday > 0 ? "ok" : "neutral"),
+    metric("Ticket promedio", money(averageTicket), "Promedio del dia", averageTicket > 0 ? "info" : "neutral"),
+    metric("Stock critico", critical, critical === 1 ? "1 insumo por reponer" : `${critical} insumos por reponer`, critical > 0 ? "bad" : "ok")
   ].join("");
 }
 
@@ -373,6 +375,74 @@ function renderDashboard() {
     .slice(0, 4)
     .map((item) => listRow(item.name, `${item.quantity} vendidos`, money(item.revenue), "ok"))
     .join("") || emptyRow("Aun no hay ventas", "Registra ventas para ver el ranking.");
+
+  renderTodaySummary();
+  renderChannelMix();
+  renderNextActions(critical);
+}
+
+function renderTodaySummary() {
+  const salesToday = state.sales.filter((sale) => sale.date === todayISO());
+  const revenue = sum(salesToday, "total");
+  const cost = sum(salesToday, "cost");
+  const units = sum(salesToday, "quantity");
+  const margin = revenue ? ((revenue - cost) / revenue) * 100 : 0;
+  const lastSale = salesToday[0];
+  const lastProduct = lastSale ? findProduct(lastSale.productId)?.name : "Sin ventas aun";
+
+  document.getElementById("todaySummary").innerHTML = [
+    listRow("Ingresos", `${units} unidades vendidas`, money(revenue), revenue > 0 ? "ok" : "warn"),
+    listRow("Margen del dia", `${margin.toFixed(1)}% sobre ventas`, money(revenue - cost), margin >= 45 ? "ok" : margin > 0 ? "warn" : "bad"),
+    listRow("Ultima venta", lastProduct, lastSale ? money(lastSale.total) : "Pendiente", lastSale ? "info" : "warn")
+  ].join("");
+}
+
+function renderChannelMix() {
+  const totals = ["Salon", "Delivery", "Recojo"].map((channel) => ({
+    channel,
+    total: sum(state.sales.filter((sale) => sale.channel === channel), "total")
+  }));
+  const max = Math.max(...totals.map((item) => item.total), 1);
+
+  document.getElementById("channelMix").innerHTML = totals.map((item) => {
+    const width = Math.max(4, (item.total / max) * 100);
+    return `
+      <div class="channel-row">
+        <div>
+          <strong>${item.channel}</strong>
+          <span>${money(item.total)}</span>
+        </div>
+        <div class="progress-track" aria-hidden="true"><span style="width:${width}%"></span></div>
+      </div>
+    `;
+  }).join("");
+}
+
+function renderNextActions(critical) {
+  const actions = [];
+  if (!state.ingredients.length) {
+    actions.push(actionCard("Registrar insumos", "Empieza por carne, pan, queso, salsas y empaques.", "insumos", "bad"));
+  }
+  if (state.ingredients.length && !state.products.length) {
+    actions.push(actionCard("Crear recetas", "Configura productos para poder vender y descontar stock.", "recetas", "warn"));
+  }
+  if (state.products.length && !state.sales.length) {
+    actions.push(actionCard("Registrar primera venta", "Usa la caja para iniciar el historial del dia.", "ventas", "info"));
+  }
+  if (critical.length) {
+    actions.push(actionCard("Reponer stock critico", `${critical.length} insumo(s) estan bajo el minimo.`, "compras", "bad"));
+  }
+  if (!state.users.length || state.users.length === 1) {
+    actions.push(actionCard("Agregar equipo", "Crea usuarios para caja u operacion.", "usuarios", "info"));
+  }
+  if (!actions.length) {
+    actions.push(actionCard("Operacion lista", "Tu dashboard no muestra pendientes urgentes.", "dashboard", "ok"));
+  }
+
+  document.getElementById("nextActions").innerHTML = actions.slice(0, 4).join("");
+  document.querySelectorAll("[data-action-view]").forEach((button) => {
+    button.addEventListener("click", () => showView(button.dataset.actionView));
+  });
 }
 
 function renderIngredients() {
@@ -560,8 +630,8 @@ function roleLabel(role) {
   }[role] || role;
 }
 
-function metric(label, value, help) {
-  return `<article class="metric"><span>${label}</span><strong>${value}</strong><small>${help}</small></article>`;
+function metric(label, value, help, tone = "neutral") {
+  return `<article class="metric metric-${tone}"><span>${label}</span><strong>${value}</strong><small>${help}</small></article>`;
 }
 
 function reportCard(label, value, help) {
@@ -574,6 +644,15 @@ function listRow(title, detail, badge, tone) {
 
 function emptyRow(title, detail) {
   return `<div class="list-row"><div><strong>${title}</strong><span>${detail}</span></div></div>`;
+}
+
+function actionCard(title, detail, view, tone) {
+  return `
+    <button class="action-card action-${tone}" type="button" data-action-view="${view}">
+      <strong>${escapeHTML(title)}</strong>
+      <span>${escapeHTML(detail)}</span>
+    </button>
+  `;
 }
 
 function persistAndRender(message) {
