@@ -2,6 +2,10 @@ const STORAGE_KEY = "burgerops-state-v2";
 const SESSION_KEY = "burgerops-session-v1";
 
 const blankState = {
+  settings: {
+    businessName: "MATARINA BURGER",
+    logo: ""
+  },
   users: [],
   ingredients: [],
   products: [],
@@ -40,7 +44,7 @@ window.addEventListener("beforeinstallprompt", (event) => {
 window.addEventListener("appinstalled", () => {
   deferredInstallPrompt = null;
   document.getElementById("installApp")?.setAttribute("hidden", "");
-  showToast("BurgerOps instalado en tu celular.");
+  showToast("MATARINA BURGER instalado en tu celular.");
 });
 
 function registerMobileApp() {
@@ -73,7 +77,7 @@ function bindNavigation() {
     bootApp();
   });
   document.getElementById("clearBusinessData").addEventListener("click", () => {
-    const confirmed = window.confirm("Esto borrara insumos, compras, recetas y ventas. Los usuarios se conservaran. Deseas continuar?");
+    const confirmed = window.confirm("Esto borrara insumos, compras, recetas y ventas. Los usuarios y el logo se conservaran. Deseas continuar?");
     if (!confirmed) {
       return;
     }
@@ -256,6 +260,39 @@ function bindForms() {
 
   document.getElementById("saleProduct").addEventListener("change", renderSaleHint);
 
+  document.getElementById("brandForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (getCurrentUser()?.role !== "admin") {
+      showToast("Solo un administrador puede cambiar el logo.");
+      return;
+    }
+    const file = event.currentTarget.logo.files[0];
+    if (!file) {
+      showToast("Selecciona una imagen para el logo.");
+      return;
+    }
+    if (!file.type.startsWith("image/")) {
+      showToast("El archivo debe ser una imagen.");
+      return;
+    }
+    state.settings.logo = await fileToDataURL(file);
+    saveState();
+    renderBrand();
+    event.currentTarget.reset();
+    showToast("Logo actualizado.");
+  });
+
+  document.getElementById("removeLogo").addEventListener("click", () => {
+    if (getCurrentUser()?.role !== "admin") {
+      showToast("Solo un administrador puede cambiar el logo.");
+      return;
+    }
+    state.settings.logo = "";
+    saveState();
+    renderBrand();
+    showToast("Logo retirado.");
+  });
+
   document.getElementById("userForm").addEventListener("submit", (event) => {
     event.preventDefault();
     if (getCurrentUser()?.role !== "admin") {
@@ -286,6 +323,7 @@ function showView(viewName) {
 }
 
 function renderAll() {
+  renderBrand();
   renderSession();
   renderSelectors();
   renderMetrics();
@@ -300,11 +338,28 @@ function renderAll() {
   renderSaleHint();
 }
 
+function renderBrand() {
+  const name = state.settings.businessName || "MATARINA BURGER";
+  document.title = `${name} | Gestion de hamburgueseria`;
+  document.querySelectorAll("[data-brand-name]").forEach((item) => {
+    item.textContent = name;
+  });
+  document.querySelectorAll(".brand-logo").forEach((image) => {
+    image.hidden = !state.settings.logo;
+    image.src = state.settings.logo || "";
+  });
+  document.querySelectorAll(".brand-mark span").forEach((span) => {
+    span.hidden = Boolean(state.settings.logo);
+  });
+}
+
 function renderSession() {
   const user = getCurrentUser();
   document.getElementById("logoutButton").textContent = user ? `Salir: ${user.name}` : "Salir";
   const canAdmin = user?.role === "admin";
   document.getElementById("clearBusinessData").hidden = !canAdmin;
+  document.getElementById("brandForm").hidden = !canAdmin;
+  document.getElementById("restorePanel").hidden = !canAdmin;
   document.querySelector('[data-view="usuarios"]').hidden = !canAdmin;
 }
 
@@ -672,12 +727,25 @@ function saveState() {
 
 function normalizeState(value) {
   return {
+    settings: {
+      businessName: value?.settings?.businessName || "MATARINA BURGER",
+      logo: value?.settings?.logo || ""
+    },
     users: Array.isArray(value?.users) ? value.users : [],
     ingredients: Array.isArray(value?.ingredients) ? value.ingredients : [],
     products: Array.isArray(value?.products) ? value.products : [],
     purchases: Array.isArray(value?.purchases) ? value.purchases : [],
     sales: Array.isArray(value?.sales) ? value.sales : []
   };
+}
+
+function fileToDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => resolve(reader.result));
+    reader.addEventListener("error", () => reject(reader.error));
+    reader.readAsDataURL(file);
+  });
 }
 
 function findIngredient(id) {
