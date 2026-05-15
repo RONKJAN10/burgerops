@@ -1,3 +1,10 @@
+import {
+  db,
+  doc,
+  setDoc,
+  getDoc,
+  onSnapshot
+} from "./firebase.js";
 const STORAGE_KEY = "burgerops-state-v2";
 const SESSION_KEY = "burgerops-session-v1";
 
@@ -15,9 +22,18 @@ const blankState = {
   shifts: []
 };
 
-let state = loadState();
+let state = structuredClone(blankState);
 let deferredInstallPrompt = null;
 let currentUserId = localStorage.getItem(SESSION_KEY);
+onSnapshot(
+  doc(db, "business", BUSINESS_ID),
+  (snapshot) => {
+    if (snapshot.exists()) {
+      state = normalizeState(snapshot.data());
+      renderAll();
+    }
+  }
+);
 
 const views = {
   dashboard: "Dashboard",
@@ -31,7 +47,7 @@ const views = {
   usuarios: "Usuarios"
 };
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   registerMobileApp();
   bindAuth();
   bindNavigation();
@@ -78,7 +94,8 @@ function bindNavigation() {
   document.getElementById("logoutButton").addEventListener("click", () => {
     localStorage.removeItem(SESSION_KEY);
     currentUserId = null;
-    bootApp();
+   await loadState();
+bootApp();
   });
   document.getElementById("clearBusinessData").addEventListener("click", () => {
     const confirmed = window.confirm("Esto borrara insumos, compras, productos, ventas, caja y gastos. Los usuarios y el logo se conservaran. Deseas continuar?");
@@ -1001,13 +1018,27 @@ function persistAndRender(message) {
   showToast(message);
 }
 
-function loadState() {
-  const stored = localStorage.getItem(STORAGE_KEY);
-  return normalizeState(stored ? JSON.parse(stored) : structuredClone(blankState));
+const BUSINESS_ID = "matarina";
+
+async function loadState() {
+  const ref = doc(db, "business", BUSINESS_ID);
+
+  const snap = await getDoc(ref);
+
+  if (snap.exists()) {
+    state = normalizeState(snap.data());
+  } else {
+    state = structuredClone(blankState);
+    await saveState();
+  }
+
+  renderAll();
 }
 
-function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizeState(state)));
+async function saveState() {
+  const ref = doc(db, "business", BUSINESS_ID);
+
+  await setDoc(ref, normalizeState(state));
 }
 
 function normalizeState(value) {
