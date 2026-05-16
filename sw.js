@@ -7,14 +7,14 @@ const APP_ASSETS = [
   "./manifest.json",
   "./icon.svg"
 ];
- 
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_ASSETS))
   );
   self.skipWaiting();
 });
- 
+
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
@@ -23,23 +23,19 @@ self.addEventListener("activate", (event) => {
   );
   self.clients.claim();
 });
- 
+
 self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET") return;
- 
-  // Ignorar URLs que no sean http/https (ej: chrome-extension://)
-  if (!event.request.url.startsWith("http")) return;
- 
+  if (event.request.method !== "GET") {
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then((cached) => {
       return cached || fetch(event.request).then((response) => {
-        if (response && response.status === 200 && event.request.url.startsWith("http")) {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-        }
+        const copy = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
         return response;
       });
     })
   );
-});
 });
