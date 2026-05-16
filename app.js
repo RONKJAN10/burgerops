@@ -866,7 +866,7 @@ function requireAdminPin() {
   return ok;
 }
 
-function editProduct(id) {
+async function editProduct(id) {
   if (!requireAdminPin()) return;
   const product = findProduct(id);
   if (!product) return;
@@ -887,14 +887,14 @@ function editProduct(id) {
   await persistAndRender("Producto modificado.");
 }
 
-function deleteProduct(id) {
+async function deleteProduct(id) {
   if (!requireAdminPin()) return;
   if (!window.confirm("Eliminar este producto? Las ventas antiguas conservaran el registro, pero el producto ya no estara disponible.")) return;
   state.products = state.products.filter((product) => product.id !== id);
   await persistAndRender("Producto eliminado.");
 }
 
-function editPurchase(id) {
+async function editPurchase(id) {
   if (!requireAdminPin()) return;
   const purchase = state.purchases.find((item) => item.id === id);
   if (!purchase) return;
@@ -918,7 +918,7 @@ function editPurchase(id) {
   await persistAndRender("Compra modificada.");
 }
 
-function deletePurchase(id) {
+async function deletePurchase(id) {
   if (!requireAdminPin()) return;
   const purchase = state.purchases.find((item) => item.id === id);
   if (!purchase) return;
@@ -931,7 +931,7 @@ function deletePurchase(id) {
   await persistAndRender("Compra eliminada.");
 }
 
-function editSale(id) {
+async function editSale(id) {
   if (!requireAdminPin()) return;
   const sale = state.sales.find((item) => item.id === id);
   if (!sale) return;
@@ -950,14 +950,14 @@ function editSale(id) {
   await persistAndRender("Venta modificada.");
 }
 
-function deleteSale(id) {
+async function deleteSale(id) {
   if (!requireAdminPin()) return;
   if (!window.confirm("Eliminar esta venta?")) return;
   state.sales = state.sales.filter((sale) => sale.id !== id);
   await persistAndRender("Venta eliminada.");
 }
 
-function editShift(id) {
+async function editShift(id) {
   if (!requireAdminPin()) return;
   const shift = state.shifts.find((item) => item.id === id);
   if (!shift) return;
@@ -974,7 +974,7 @@ function editShift(id) {
   await persistAndRender("Caja modificada.");
 }
 
-function deleteShift(id) {
+async function deleteShift(id) {
   if (!requireAdminPin()) return;
   const hasMoves = state.sales.some((sale) => sale.shiftId === id) || state.expenses.some((expense) => expense.shiftId === id);
   if (hasMoves && !window.confirm("Este turno tiene ventas o gastos. Deseas eliminar solo el registro de caja?")) return;
@@ -982,7 +982,7 @@ function deleteShift(id) {
   await persistAndRender("Caja eliminada.");
 }
 
-function editExpense(id) {
+async function editExpense(id) {
   if (!requireAdminPin()) return;
   const expense = state.expenses.find((item) => item.id === id);
   if (!expense) return;
@@ -1001,7 +1001,7 @@ function editExpense(id) {
   await persistAndRender("Gasto modificado.");
 }
 
-function deleteExpense(id) {
+async function deleteExpense(id) {
   if (!requireAdminPin()) return;
   if (!window.confirm("Eliminar este gasto?")) return;
   state.expenses = state.expenses.filter((expense) => expense.id !== id);
