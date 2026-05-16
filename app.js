@@ -1,9 +1,4 @@
-import {
-  database,
-  ref,
-  set,
-  onValue
-} from "./firebase.js";
+const STORAGE_KEY = "burgerops-state-v2";
 const SESSION_KEY = "burgerops-session-v1";
 
 const blankState = {
@@ -20,9 +15,9 @@ const blankState = {
   shifts: []
 };
 
-let state = structuredClone(blankState);
+let state = loadState();
 let deferredInstallPrompt = null;
-let currentUserId = (SESSION_KEY);
+let currentUserId = localStorage.getItem(SESSION_KEY);
 
 const views = {
   dashboard: "Dashboard",
@@ -36,20 +31,12 @@ const views = {
   usuarios: "Usuarios"
 };
 
-window.addEventListener("DOMContentLoaded", () => {
-
+document.addEventListener("DOMContentLoaded", () => {
   registerMobileApp();
-
   bindAuth();
-
   bindNavigation();
-
   bindForms();
-
-  loadState();
-
   bootApp();
-
 });
 
 window.addEventListener("beforeinstallprompt", (event) => {
@@ -111,7 +98,7 @@ function bindNavigation() {
 }
 
 function bindAuth() {
-  document.getElementById("setupForm").addEventListener("submit", async (event) => {
+  document.getElementById("setupForm").addEventListener("submit", (event) => {
     event.preventDefault();
     const form = event.currentTarget;
     const data = Object.fromEntries(new FormData(form));
@@ -129,7 +116,7 @@ function bindAuth() {
     showToast("Administrador creado.");
   });
 
-  document.getElementById("loginForm").addEventListener("submit", async (event) => {
+  document.getElementById("loginForm").addEventListener("submit", (event) => {
     event.preventDefault();
     const form = event.currentTarget;
     const data = Object.fromEntries(new FormData(form));
@@ -165,7 +152,7 @@ function loginAs(userId) {
 }
 
 function bindForms() {
-  document.getElementById("ingredientForm").addEventListener("submit", async (event) => {
+  document.getElementById("ingredientForm").addEventListener("submit", (event) => {
     event.preventDefault();
     const form = event.currentTarget;
     const data = Object.fromEntries(new FormData(form));
@@ -178,10 +165,10 @@ function bindForms() {
       cost: Number(data.cost)
     });
     form.reset();
-    await persistAndRender("Insumo registrado.");
+    persistAndRender("Insumo registrado.");
   });
 
-  document.getElementById("purchaseForm").addEventListener("submit", async (event) => {
+  document.getElementById("purchaseForm").addEventListener("submit", (event) => {
     event.preventDefault();
     const form = event.currentTarget;
     const data = Object.fromEntries(new FormData(form));
@@ -203,14 +190,14 @@ function bindForms() {
       total
     });
     form.reset();
-    await persistAndRender("Compra registrada y stock actualizado.");
+    persistAndRender("Compra registrada y stock actualizado.");
   });
 
   document.getElementById("purchaseIngredient").addEventListener("change", updatePurchasePrice);
   document.getElementById("purchaseForm").quantity.addEventListener("input", updatePurchaseTotal);
   document.getElementById("purchaseForm").unitPrice.addEventListener("input", updatePurchaseTotal);
 
-  document.getElementById("recipeForm").addEventListener("submit", async (event) => {
+  document.getElementById("recipeForm").addEventListener("submit", (event) => {
     event.preventDefault();
     const form = event.currentTarget;
     const data = Object.fromEntries(new FormData(form));
@@ -220,10 +207,10 @@ function bindForms() {
       price: Number(data.price)
     });
     form.reset();
-    await persistAndRender("Producto guardado.");
+    persistAndRender("Producto guardado.");
   });
 
-  document.getElementById("saleForm").addEventListener("submit", async (event) => {
+  document.getElementById("saleForm").addEventListener("submit", (event) => {
     event.preventDefault();
     const form = event.currentTarget;
     const data = Object.fromEntries(new FormData(form));
@@ -258,7 +245,7 @@ function bindForms() {
     form.reset();
     form.quantity.value = 1;
     updateSaleTotals();
-    await persistAndRender("Venta registrada.");
+    persistAndRender("Venta registrada.");
   });
 
   document.getElementById("saleProduct").addEventListener("change", updateSaleTotals);
@@ -266,7 +253,7 @@ function bindForms() {
   document.getElementById("saleForm").amountReceived.addEventListener("input", updateSaleTotals);
   document.getElementById("printLastTicket").addEventListener("click", () => printTicket(state.sales[0]));
 
-  document.getElementById("shiftForm").addEventListener("submit", async (event) => {
+  document.getElementById("shiftForm").addEventListener("submit", (event) => {
     event.preventDefault();
     const form = event.currentTarget;
     const data = Object.fromEntries(new FormData(form));
@@ -296,7 +283,7 @@ function bindForms() {
     showToast("Caja abierta.");
   });
 
-  document.getElementById("expenseForm").addEventListener("submit", async (event) => {
+  document.getElementById("expenseForm").addEventListener("submit", (event) => {
     event.preventDefault();
     const activeShift = getActiveShift();
     if (!activeShift) {
@@ -317,7 +304,7 @@ function bindForms() {
       userId: currentUserId
     });
     form.reset();
-    await persistAndRender("Gasto registrado.");
+    persistAndRender("Gasto registrado.");
   });
 
   document.getElementById("exportSales").addEventListener("click", () => exportSales());
@@ -358,7 +345,7 @@ function bindForms() {
     showToast("Logo retirado.");
   });
 
-  document.getElementById("userForm").addEventListener("submit", async (event) => {
+  document.getElementById("userForm").addEventListener("submit", (event) => {
     event.preventDefault();
     if (getCurrentUser()?.role !== "admin") {
       showToast("Solo un administrador puede crear usuarios.");
@@ -374,7 +361,7 @@ function bindForms() {
       active: true
     });
     form.reset();
-    await persistAndRender("Usuario creado.");
+    persistAndRender("Usuario creado.");
   });
 }
 
@@ -866,7 +853,7 @@ function requireAdminPin() {
   return ok;
 }
 
-async function editProduct(id) {
+function editProduct(id) {
   if (!requireAdminPin()) return;
   const product = findProduct(id);
   if (!product) return;
@@ -884,17 +871,17 @@ async function editProduct(id) {
       sale.total = product.price * sale.quantity;
     }
   });
-  await persistAndRender("Producto modificado.");
+  persistAndRender("Producto modificado.");
 }
 
-async function deleteProduct(id) {
+function deleteProduct(id) {
   if (!requireAdminPin()) return;
   if (!window.confirm("Eliminar este producto? Las ventas antiguas conservaran el registro, pero el producto ya no estara disponible.")) return;
   state.products = state.products.filter((product) => product.id !== id);
-  await persistAndRender("Producto eliminado.");
+  persistAndRender("Producto eliminado.");
 }
 
-async function editPurchase(id) {
+function editPurchase(id) {
   if (!requireAdminPin()) return;
   const purchase = state.purchases.find((item) => item.id === id);
   if (!purchase) return;
@@ -915,10 +902,10 @@ async function editPurchase(id) {
   purchase.supplier = supplier.trim();
   purchase.quantity = quantity;
   purchase.total = total;
-  await persistAndRender("Compra modificada.");
+  persistAndRender("Compra modificada.");
 }
 
-async function deletePurchase(id) {
+function deletePurchase(id) {
   if (!requireAdminPin()) return;
   const purchase = state.purchases.find((item) => item.id === id);
   if (!purchase) return;
@@ -928,10 +915,10 @@ async function deletePurchase(id) {
     ingredient.stock = Math.max(0, ingredient.stock - purchase.quantity);
   }
   state.purchases = state.purchases.filter((item) => item.id !== id);
-  await persistAndRender("Compra eliminada.");
+  persistAndRender("Compra eliminada.");
 }
 
-async function editSale(id) {
+function editSale(id) {
   if (!requireAdminPin()) return;
   const sale = state.sales.find((item) => item.id === id);
   if (!sale) return;
@@ -947,17 +934,17 @@ async function editSale(id) {
   sale.channel = channel.trim();
   sale.total = (product?.price || 0) * quantity;
   sale.cost = 0;
-  await persistAndRender("Venta modificada.");
+  persistAndRender("Venta modificada.");
 }
 
-async function deleteSale(id) {
+function deleteSale(id) {
   if (!requireAdminPin()) return;
   if (!window.confirm("Eliminar esta venta?")) return;
   state.sales = state.sales.filter((sale) => sale.id !== id);
-  await persistAndRender("Venta eliminada.");
+  persistAndRender("Venta eliminada.");
 }
 
-async function editShift(id) {
+function editShift(id) {
   if (!requireAdminPin()) return;
   const shift = state.shifts.find((item) => item.id === id);
   if (!shift) return;
@@ -971,18 +958,18 @@ async function editShift(id) {
   shift.openingCash = openingCash;
   shift.closingCash = closingCash;
   shift.notes = notes || "";
-  await persistAndRender("Caja modificada.");
+  persistAndRender("Caja modificada.");
 }
 
-async function deleteShift(id) {
+function deleteShift(id) {
   if (!requireAdminPin()) return;
   const hasMoves = state.sales.some((sale) => sale.shiftId === id) || state.expenses.some((expense) => expense.shiftId === id);
   if (hasMoves && !window.confirm("Este turno tiene ventas o gastos. Deseas eliminar solo el registro de caja?")) return;
   state.shifts = state.shifts.filter((shift) => shift.id !== id);
-  await persistAndRender("Caja eliminada.");
+  persistAndRender("Caja eliminada.");
 }
 
-async function editExpense(id) {
+function editExpense(id) {
   if (!requireAdminPin()) return;
   const expense = state.expenses.find((item) => item.id === id);
   if (!expense) return;
@@ -998,63 +985,29 @@ async function editExpense(id) {
   expense.concept = concept.trim();
   expense.category = category.trim();
   expense.amount = amount;
-  await persistAndRender("Gasto modificado.");
+  persistAndRender("Gasto modificado.");
 }
 
-async function deleteExpense(id) {
+function deleteExpense(id) {
   if (!requireAdminPin()) return;
   if (!window.confirm("Eliminar este gasto?")) return;
   state.expenses = state.expenses.filter((expense) => expense.id !== id);
-  await persistAndRender("Gasto eliminado.");
+  persistAndRender("Gasto eliminado.");
 }
 
-async function persistAndRender(message) {
-  await saveState();
+function persistAndRender(message) {
+  saveState();
   renderAll();
   showToast(message);
 }
 
 function loadState() {
-
-  const dbRef = ref(database, "burgerops/state");
-
-  onValue(dbRef, (snapshot) => {
-
-    const data = snapshot.val();
-
-    console.log("Firebase conectado", data);
-
-    if (data) {
-      state = normalizeState(data);
-    } else {
-      state = structuredClone(blankState);
-    }
-
-    renderAll();
-
-  });
-
+  const stored = localStorage.getItem(STORAGE_KEY);
+  return normalizeState(stored ? JSON.parse(stored) : structuredClone(blankState));
 }
 
-async function saveState() {
-
-  try {
-
-    await set(
-      ref(database, "burgerops/state"),
-      normalizeState(state)
-    );
-
-    console.log("Datos sincronizados");
-
-  } catch (error) {
-
-    console.error(error);
-
-    showToast("Error sincronizando");
-
-  }
-
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizeState(state)));
 }
 
 function normalizeState(value) {
