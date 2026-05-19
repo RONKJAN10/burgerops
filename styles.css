@@ -702,6 +702,14 @@ th {
   margin-top: 16px;
 }
 
+.cash-flow-grid {
+  margin-top: 12px;
+}
+
+.secondary-heading {
+  margin-top: 18px;
+}
+
 .toast {
   position: fixed;
   right: 24px;

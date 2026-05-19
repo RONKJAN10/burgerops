@@ -1,4 +1,9 @@
-const STORAGE_KEY = "burgerops-state-v2";
+import {
+  database,
+  ref,
+  set,
+  onValue
+} from "./firebase.js";
 const SESSION_KEY = "burgerops-session-v1";
 
 const blankState = {
@@ -15,9 +20,9 @@ const blankState = {
   shifts: []
 };
 
-let state = loadState();
+let state = structuredClone(blankState);
 let deferredInstallPrompt = null;
-let currentUserId = localStorage.getItem(SESSION_KEY);
+let currentUserId = (SESSION_KEY);
 
 const views = {
   dashboard: "Dashboard",
@@ -31,12 +36,20 @@ const views = {
   usuarios: "Usuarios"
 };
 
-document.addEventListener("DOMContentLoaded", () => {
+window.addEventListener("DOMContentLoaded", () => {
+
   registerMobileApp();
+
   bindAuth();
+
   bindNavigation();
+
   bindForms();
+
+  loadState();
+
   bootApp();
+
 });
 
 window.addEventListener("beforeinstallprompt", (event) => {
@@ -98,7 +111,7 @@ function bindNavigation() {
 }
 
 function bindAuth() {
-  document.getElementById("setupForm").addEventListener("submit", (event) => {
+  document.getElementById("setupForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = event.currentTarget;
     const data = Object.fromEntries(new FormData(form));
@@ -116,7 +129,7 @@ function bindAuth() {
     showToast("Administrador creado.");
   });
 
-  document.getElementById("loginForm").addEventListener("submit", (event) => {
+  document.getElementById("loginForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = event.currentTarget;
     const data = Object.fromEntries(new FormData(form));
@@ -152,7 +165,7 @@ function loginAs(userId) {
 }
 
 function bindForms() {
-  document.getElementById("ingredientForm").addEventListener("submit", (event) => {
+  document.getElementById("ingredientForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = event.currentTarget;
     const data = Object.fromEntries(new FormData(form));
@@ -168,7 +181,7 @@ function bindForms() {
     persistAndRender("Insumo registrado.");
   });
 
-  document.getElementById("purchaseForm").addEventListener("submit", (event) => {
+  document.getElementById("purchaseForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = event.currentTarget;
     const data = Object.fromEntries(new FormData(form));
@@ -197,20 +210,42 @@ function bindForms() {
   document.getElementById("purchaseForm").quantity.addEventListener("input", updatePurchaseTotal);
   document.getElementById("purchaseForm").unitPrice.addEventListener("input", updatePurchaseTotal);
 
-  document.getElementById("recipeForm").addEventListener("submit", (event) => {
+  document.getElementById("recipeForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = event.currentTarget;
     const data = Object.fromEntries(new FormData(form));
     state.products.push({
       id: makeId("prod"),
       name: data.name.trim(),
-      price: Number(data.price)
+      price: Number(data.price),
+      recipe: []
     });
     form.reset();
     persistAndRender("Producto guardado.");
   });
 
-  document.getElementById("saleForm").addEventListener("submit", (event) => {
+  document.getElementById("recipeLineForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = Object.fromEntries(new FormData(form));
+    const product = findProduct(data.productId);
+    const ingredient = findIngredient(data.ingredientId);
+    if (!product || !ingredient) {
+      showToast("Registra productos e insumos antes de crear recetas.");
+      return;
+    }
+    product.recipe = Array.isArray(product.recipe) ? product.recipe : [];
+    const existing = product.recipe.find((line) => line.ingredientId === ingredient.id);
+    if (existing) {
+      existing.quantity = Number(data.quantity);
+    } else {
+      product.recipe.push({ ingredientId: ingredient.id, quantity: Number(data.quantity) });
+    }
+    form.reset();
+    persistAndRender("Receta actualizada.");
+  });
+
+  document.getElementById("saleForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = event.currentTarget;
     const data = Object.fromEntries(new FormData(form));
@@ -226,6 +261,13 @@ function bindForms() {
       return;
     }
     const quantity = Number(data.quantity);
+    const availability = checkRecipeAvailability(product, quantity);
+    if (!availability.ok) {
+      showToast(`Stock insuficiente: ${availability.name}.`);
+      return;
+    }
+    const unitCost = productCost(product);
+    consumeRecipe(product, quantity);
     const saleTotal = calculateSaleTotal();
     const amountReceived = Number(data.amountReceived || 0);
     state.sales.unshift({
@@ -235,7 +277,7 @@ function bindForms() {
       quantity,
       channel: data.channel,
       total: saleTotal,
-      cost: 0,
+      cost: unitCost * quantity,
       amountReceived,
       changeDue: Math.max(0, amountReceived - saleTotal),
       shiftId: activeShift.id,
@@ -253,7 +295,7 @@ function bindForms() {
   document.getElementById("saleForm").amountReceived.addEventListener("input", updateSaleTotals);
   document.getElementById("printLastTicket").addEventListener("click", () => printTicket(state.sales[0]));
 
-  document.getElementById("shiftForm").addEventListener("submit", (event) => {
+  document.getElementById("shiftForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = event.currentTarget;
     const data = Object.fromEntries(new FormData(form));
@@ -283,7 +325,7 @@ function bindForms() {
     showToast("Caja abierta.");
   });
 
-  document.getElementById("expenseForm").addEventListener("submit", (event) => {
+  document.getElementById("expenseForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const activeShift = getActiveShift();
     if (!activeShift) {
@@ -345,7 +387,7 @@ function bindForms() {
     showToast("Logo retirado.");
   });
 
-  document.getElementById("userForm").addEventListener("submit", (event) => {
+  document.getElementById("userForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     if (getCurrentUser()?.role !== "admin") {
       showToast("Solo un administrador puede crear usuarios.");
@@ -422,6 +464,8 @@ function renderSelectors() {
     .join("");
   document.getElementById("purchaseIngredient").innerHTML = ingredientOptions || `<option value="">Sin insumos</option>`;
   document.getElementById("purchaseIngredient").disabled = !state.ingredients.length;
+  document.getElementById("recipeIngredient").innerHTML = ingredientOptions || `<option value="">Sin insumos</option>`;
+  document.getElementById("recipeIngredient").disabled = !state.ingredients.length;
   updatePurchasePrice();
 
   const productOptions = state.products
@@ -429,6 +473,8 @@ function renderSelectors() {
     .join("");
   document.getElementById("saleProduct").innerHTML = productOptions || `<option value="">Sin productos</option>`;
   document.getElementById("saleProduct").disabled = !state.products.length;
+  document.getElementById("recipeProduct").innerHTML = productOptions || `<option value="">Sin productos</option>`;
+  document.getElementById("recipeProduct").disabled = !state.products.length;
   updateSaleTotals();
 }
 
@@ -631,15 +677,22 @@ function renderPurchases() {
 
 function renderProducts() {
   document.getElementById("productsList").innerHTML = state.products.length ? state.products.map((product) => {
+    const recipe = Array.isArray(product.recipe) ? product.recipe : [];
+    const recipeText = recipe.length
+      ? recipe.map((line) => {
+        const ingredient = findIngredient(line.ingredientId);
+        return `${round(line.quantity)} ${ingredient?.unit || ""} ${ingredient?.name || "Insumo"}`;
+      }).join(" / ")
+      : "Sin receta asignada";
     return `
       <div class="product-card">
         <div>
           <strong>${escapeHTML(product.name)}</strong>
-          <span>Producto de venta</span>
+          <span>${escapeHTML(recipeText)}</span>
         </div>
         <div>
           <strong>${money(product.price)}</strong>
-          <span>Precio de carta</span>
+          <span>Costo receta ${money(productCost(product))}</span>
         </div>
         <div class="row-actions">
           <button class="ghost-button small-button" type="button" onclick="editProduct('${product.id}')">Modificar</button>
@@ -749,13 +802,16 @@ function renderReports() {
 
   document.getElementById("reportGrid").innerHTML = [
     reportCard("Ventas acumuladas", money(revenue), `${units} unidades`),
-    reportCard("Costo vendido", money(cost), "Sin receta configurada"),
-    reportCard("Utilidad bruta", money(revenue - cost), "Antes de gastos fijos"),
-    reportCard("Gastos", money(expenses), "Egresos registrados"),
+    reportCard("Costo vendido", money(cost), "Segun recetas"),
+    reportCard("Gastos operativos", money(expenses), "Servicios, alquiler y otros"),
+    reportCard("Compras insumos", money(purchases), "Reposicion de inventario"),
     reportCard("Ticket promedio", money(averageTicket), `${tickets} tickets`),
-    reportCard("Compras registradas", money(purchases), "Reposicion de insumos"),
-    reportCard("Caja neta", money(revenue - expenses), "Ventas menos gastos")
+    reportCard("Rentabilidad", money(revenue - cost - expenses), "Ventas - costo vendido - gastos"),
+    reportCard("Caja neta", money(revenue - expenses - purchases), "Ventas - gastos - compras")
   ].join("");
+
+  renderCashFlow();
+  renderConsumption();
 
   const suggestions = state.ingredients
     .filter((item) => item.stock <= item.minStock * 1.5)
@@ -767,6 +823,29 @@ function renderReports() {
   document.getElementById("shoppingSuggestions").innerHTML = suggestions.join("") || emptyRow("Sin compras sugeridas", "El stock actual cubre el minimo.");
 }
 
+function renderCashFlow() {
+  const periods = [
+    ["Diario", periodStart("day")],
+    ["Semanal", periodStart("week")],
+    ["Mensual", periodStart("month")]
+  ];
+  document.getElementById("cashFlowGrid").innerHTML = periods.map(([label, start]) => {
+    const stats = cashFlowSince(start);
+    return reportCard(
+      `Flujo ${label.toLowerCase()}`,
+      money(stats.cash),
+      `Ventas ${money(stats.sales)} / Compras ${money(stats.purchases)} / Gastos ${money(stats.expenses)} / Rent. ${money(stats.profit)}`
+    );
+  }).join("");
+}
+
+function renderConsumption() {
+  const consumption = ingredientConsumptionSince(periodStart("month"));
+  document.getElementById("consumptionList").innerHTML = consumption.length
+    ? consumption.map((item) => listRow(item.name, `${round(item.quantity)} ${item.unit} consumidos este mes`, `Stock ${round(item.stock)}`, item.stock <= item.minStock ? "bad" : "info")).join("")
+    : emptyRow("Sin consumo registrado", "Asigna recetas y registra ventas para ver consumo.");
+}
+
 function renderSaleHint() {
   const select = document.getElementById("saleProduct");
   const hint = document.getElementById("saleHint");
@@ -775,15 +854,84 @@ function renderSaleHint() {
     hint.textContent = "Configura un producto para empezar a vender.";
     return;
   }
-  hint.textContent = `Precio ${money(product.price)} | producto listo para venta`;
+  const recipeCost = productCost(product);
+  hint.textContent = `Precio ${money(product.price)} | costo receta ${money(recipeCost)} | margen unitario ${money(product.price - recipeCost)}`;
 }
 
 function productCost(product) {
-  return 0;
+  const recipe = Array.isArray(product?.recipe) ? product.recipe : [];
+  return recipe.reduce((total, line) => {
+    const ingredient = findIngredient(line.ingredientId);
+    return total + (ingredient ? ingredient.cost * Number(line.quantity || 0) : 0);
+  }, 0);
 }
 
 function maxSellableUnits(product) {
   return 0;
+}
+
+function checkRecipeAvailability(product, quantity) {
+  const recipe = Array.isArray(product.recipe) ? product.recipe : [];
+  for (const line of recipe) {
+    const ingredient = findIngredient(line.ingredientId);
+    const required = Number(line.quantity || 0) * quantity;
+    if (!ingredient || ingredient.stock < required) {
+      return { ok: false, name: ingredient?.name || "insumo faltante" };
+    }
+  }
+  return { ok: true };
+}
+
+function consumeRecipe(product, quantity) {
+  const recipe = Array.isArray(product.recipe) ? product.recipe : [];
+  recipe.forEach((line) => {
+    const ingredient = findIngredient(line.ingredientId);
+    if (ingredient) {
+      ingredient.stock -= Number(line.quantity || 0) * quantity;
+    }
+  });
+}
+
+function restoreRecipe(product, quantity) {
+  const recipe = Array.isArray(product?.recipe) ? product.recipe : [];
+  recipe.forEach((line) => {
+    const ingredient = findIngredient(line.ingredientId);
+    if (ingredient) {
+      ingredient.stock += Number(line.quantity || 0) * quantity;
+    }
+  });
+}
+
+function cashFlowSince(startDate) {
+  const sales = sum(state.sales.filter((sale) => sale.date >= startDate), "total");
+  const cost = sum(state.sales.filter((sale) => sale.date >= startDate), "cost");
+  const purchases = sum(state.purchases.filter((purchase) => purchase.date >= startDate), "total");
+  const expenses = sum(state.expenses.filter((expense) => expense.date >= startDate), "amount");
+  return {
+    sales,
+    cost,
+    purchases,
+    expenses,
+    profit: sales - cost - expenses,
+    cash: sales - purchases - expenses
+  };
+}
+
+function ingredientConsumptionSince(startDate) {
+  const totals = new Map();
+  state.sales.filter((sale) => sale.date >= startDate).forEach((sale) => {
+    const product = findProduct(sale.productId);
+    const recipe = Array.isArray(product?.recipe) ? product.recipe : [];
+    recipe.forEach((line) => {
+      const ingredient = findIngredient(line.ingredientId);
+      if (!ingredient) return;
+      const current = totals.get(ingredient.id) || { name: ingredient.name, unit: ingredient.unit, quantity: 0, stock: ingredient.stock, minStock: ingredient.minStock };
+      current.quantity += Number(line.quantity || 0) * Number(sale.quantity || 0);
+      current.stock = ingredient.stock;
+      totals.set(ingredient.id, current);
+    });
+  });
+  return [...totals.values()].sort((a, b) => b.quantity - a.quantity);
 }
 
 function getCurrentUser() {
@@ -928,18 +1076,33 @@ function editSale(id) {
     showToast("Cantidad invalida.");
     return;
   }
+  restoreRecipe(product, sale.quantity);
+  const availability = checkRecipeAvailability(product, quantity);
+  if (!availability.ok) {
+    consumeRecipe(product, sale.quantity);
+    showToast(`Stock insuficiente: ${availability.name}.`);
+    return;
+  }
+  consumeRecipe(product, quantity);
   const channel = window.prompt("Canal: Salon, Delivery o Recojo", sale.channel);
-  if (!channel) return;
+  if (!channel) {
+    restoreRecipe(product, quantity);
+    consumeRecipe(product, sale.quantity);
+    return;
+  }
   sale.quantity = quantity;
   sale.channel = channel.trim();
   sale.total = (product?.price || 0) * quantity;
-  sale.cost = 0;
+  sale.cost = productCost(product) * quantity;
   persistAndRender("Venta modificada.");
 }
 
 function deleteSale(id) {
   if (!requireAdminPin()) return;
   if (!window.confirm("Eliminar esta venta?")) return;
+  const sale = state.sales.find((item) => item.id === id);
+  const product = findProduct(sale?.productId);
+  restoreRecipe(product, sale?.quantity || 0);
   state.sales = state.sales.filter((sale) => sale.id !== id);
   persistAndRender("Venta eliminada.");
 }
@@ -995,19 +1158,53 @@ function deleteExpense(id) {
   persistAndRender("Gasto eliminado.");
 }
 
-function persistAndRender(message) {
-  saveState();
+async function persistAndRender(message) {
+  await saveState();
   renderAll();
   showToast(message);
 }
 
 function loadState() {
-  const stored = localStorage.getItem(STORAGE_KEY);
-  return normalizeState(stored ? JSON.parse(stored) : structuredClone(blankState));
+
+  const dbRef = ref(database, "burgerops/state");
+
+  onValue(dbRef, (snapshot) => {
+
+    const data = snapshot.val();
+
+    console.log("Firebase conectado", data);
+
+    if (data) {
+      state = normalizeState(data);
+    } else {
+      state = structuredClone(blankState);
+    }
+
+    renderAll();
+
+  });
+
 }
 
-function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizeState(state)));
+async function saveState() {
+
+  try {
+
+    await set(
+      ref(database, "burgerops/state"),
+      normalizeState(state)
+    );
+
+    console.log("Datos sincronizados");
+
+  } catch (error) {
+
+    console.error(error);
+
+    showToast("Error sincronizando");
+
+  }
+
 }
 
 function normalizeState(value) {
@@ -1137,6 +1334,19 @@ function localISO(date) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function periodStart(type) {
+  const date = new Date();
+  if (type === "week") {
+    const day = date.getDay() || 7;
+    date.setDate(date.getDate() - day + 1);
+  }
+  if (type === "month") {
+    date.setDate(1);
+  }
+  date.setHours(0, 0, 0, 0);
+  return localISO(date);
 }
 
 function makeId(prefix) {

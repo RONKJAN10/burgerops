@@ -217,17 +217,31 @@
 
         <section class="view" id="recetas">
           <div class="content-grid">
-            <form class="panel form-panel" id="recipeForm">
-              <div class="panel-heading">
-                <div>
-                  <p class="eyebrow">Carta</p>
-                  <h2>Registrar producto</h2>
+            <div class="stack-list">
+              <form class="panel form-panel" id="recipeForm">
+                <div class="panel-heading">
+                  <div>
+                    <p class="eyebrow">Carta</p>
+                    <h2>Registrar producto</h2>
+                  </div>
                 </div>
-              </div>
-              <label>Producto<input name="name" required placeholder="Cheeseburger clasica"></label>
-              <label>Precio de venta S/<input name="price" type="number" min="0" step="0.01" required></label>
-              <button class="primary-button" type="submit">Guardar producto</button>
-            </form>
+                <label>Producto<input name="name" required placeholder="Cheeseburger clasica"></label>
+                <label>Precio de venta S/<input name="price" type="number" min="0" step="0.01" required></label>
+                <button class="primary-button" type="submit">Guardar producto</button>
+              </form>
+              <form class="panel form-panel" id="recipeLineForm">
+                <div class="panel-heading">
+                  <div>
+                    <p class="eyebrow">Receta</p>
+                    <h2>Consumo por producto</h2>
+                  </div>
+                </div>
+                <label>Producto<select name="productId" id="recipeProduct"></select></label>
+                <label>Insumo<select name="ingredientId" id="recipeIngredient"></select></label>
+                <label>Cantidad por unidad<input name="quantity" type="number" min="0.001" step="0.001" required></label>
+                <button class="primary-button" type="submit">Agregar a receta</button>
+              </form>
+            </div>
             <article class="panel table-panel">
               <div class="panel-heading">
                 <div>
@@ -328,6 +342,7 @@
                 <select name="category">
                   <option>Operacion</option>
                   <option>Servicios</option>
+                  <option>Alquiler</option>
                   <option>Personal</option>
                   <option>Delivery</option>
                   <option>Otros</option>
@@ -363,6 +378,7 @@
                 </div>
               </div>
               <div class="report-grid" id="reportGrid"></div>
+              <div class="report-grid cash-flow-grid" id="cashFlowGrid"></div>
               <div class="button-row report-actions">
                 <button class="ghost-button" id="exportSales" type="button">Exportar ventas</button>
                 <button class="ghost-button" id="exportInventory" type="button">Exportar inventario</button>
@@ -378,6 +394,13 @@
                 </div>
               </div>
               <div class="stack-list" id="shoppingSuggestions"></div>
+              <div class="panel-heading secondary-heading">
+                <div>
+                  <p class="eyebrow">Consumo</p>
+                  <h2>Insumos usados</h2>
+                </div>
+              </div>
+              <div class="stack-list" id="consumptionList"></div>
             </article>
           </div>
         </section>
@@ -456,6 +479,6 @@
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="app.js"></script>
+    <script type="module" src="app.js"></script>
   </body>
 </html>
