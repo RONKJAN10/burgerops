@@ -1,10 +1,7 @@
-import {
-  database,
-  ref,
-  set,
-  onValue
-} from "./firebase.js";
+const STORAGE_KEY = "matarina-burger-state-v1";
 const SESSION_KEY = "burgerops-session-v1";
+const SUPABASE_CONFIG_KEY = "matarina-burger-supabase-v1";
+const CLOUD_ROW_ID = "matarina-burger";
 
 const blankState = {
   settings: {
@@ -22,7 +19,8 @@ const blankState = {
 
 let state = structuredClone(blankState);
 let deferredInstallPrompt = null;
-let currentUserId = (SESSION_KEY);
+let currentUserId = localStorage.getItem(SESSION_KEY);
+let isSyncingCloud = false;
 
 const views = {
   dashboard: "Dashboard",
@@ -140,6 +138,15 @@ function bindAuth() {
     }
     loginAs(user.id);
     form.reset();
+  });
+
+  document.getElementById("authSupabaseForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    saveSupabaseConfig(form.url.value, form.key.value);
+    await pullFromSupabase({ statusId: "authCloudStatus" });
+    form.reset();
+    bootApp();
   });
 }
 
@@ -354,6 +361,21 @@ function bindForms() {
   document.getElementById("exportExpenses").addEventListener("click", () => exportExpenses());
   document.getElementById("exportClosings").addEventListener("click", () => exportClosings());
 
+  document.getElementById("supabaseForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    saveSupabaseConfig(form.url.value, form.key.value);
+    renderCloudStatus("Conexion guardada. Ahora puedes subir o descargar datos.");
+    form.reset();
+  });
+  document.getElementById("uploadCloud").addEventListener("click", async () => {
+    await pushToSupabase({ statusId: "cloudStatus", force: true });
+  });
+  document.getElementById("downloadCloud").addEventListener("click", async () => {
+    await pullFromSupabase({ statusId: "cloudStatus" });
+    renderAll();
+  });
+
   document.getElementById("brandForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     if (getCurrentUser()?.role !== "admin") {
@@ -454,8 +476,10 @@ function renderSession() {
   const canAdmin = user?.role === "admin";
   document.getElementById("clearBusinessData").hidden = !canAdmin;
   document.getElementById("brandForm").hidden = !canAdmin;
+  document.getElementById("supabaseForm").hidden = !canAdmin;
   document.getElementById("restorePanel").hidden = !canAdmin;
   document.querySelector('[data-view="usuarios"]').hidden = !canAdmin;
+  renderCloudStatus(getSupabaseConfig() ? "Supabase conectado en este dispositivo." : "Supabase no configurado.");
 }
 
 function renderSelectors() {
@@ -1165,46 +1189,21 @@ async function persistAndRender(message) {
 }
 
 function loadState() {
-
-  const dbRef = ref(database, "burgerops/state");
-
-  onValue(dbRef, (snapshot) => {
-
-    const data = snapshot.val();
-
-    console.log("Firebase conectado", data);
-
-    if (data) {
-      state = normalizeState(data);
-    } else {
-      state = structuredClone(blankState);
+  const stored = localStorage.getItem(STORAGE_KEY);
+  state = normalizeState(stored ? JSON.parse(stored) : structuredClone(blankState));
+  pullFromSupabase({ silent: true }).then((changed) => {
+    if (changed) {
+      bootApp();
     }
-
-    renderAll();
-
   });
-
 }
 
 async function saveState() {
-
-  try {
-
-    await set(
-      ref(database, "burgerops/state"),
-      normalizeState(state)
-    );
-
-    console.log("Datos sincronizados");
-
-  } catch (error) {
-
-    console.error(error);
-
-    showToast("Error sincronizando");
-
-  }
-
+  const normalized = normalizeState(state);
+  normalized.updatedAt = new Date().toISOString();
+  state = normalized;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  await pushToSupabase({ silent: true });
 }
 
 function normalizeState(value) {
@@ -1219,8 +1218,108 @@ function normalizeState(value) {
     purchases: Array.isArray(value?.purchases) ? value.purchases : [],
     sales: Array.isArray(value?.sales) ? value.sales : [],
     expenses: Array.isArray(value?.expenses) ? value.expenses : [],
-    shifts: Array.isArray(value?.shifts) ? value.shifts : []
+    shifts: Array.isArray(value?.shifts) ? value.shifts : [],
+    updatedAt: value?.updatedAt || ""
   };
+}
+
+function saveSupabaseConfig(url, key) {
+  const cleanUrl = String(url || "").trim().replace(/\/$/, "");
+  const cleanKey = String(key || "").trim();
+  if (!cleanUrl || !cleanKey) {
+    showToast("Ingresa URL y anon key de Supabase.");
+    return false;
+  }
+  localStorage.setItem(SUPABASE_CONFIG_KEY, JSON.stringify({ url: cleanUrl, key: cleanKey }));
+  return true;
+}
+
+function getSupabaseConfig() {
+  try {
+    const value = JSON.parse(localStorage.getItem(SUPABASE_CONFIG_KEY) || "null");
+    return value?.url && value?.key ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function supabaseHeaders(config) {
+  return {
+    apikey: config.key,
+    Authorization: `Bearer ${config.key}`,
+    "Content-Type": "application/json"
+  };
+}
+
+async function pullFromSupabase(options = {}) {
+  const config = getSupabaseConfig();
+  if (!config) {
+    if (!options.silent) renderCloudStatus("Configura Supabase primero.", options.statusId);
+    return false;
+  }
+  try {
+    isSyncingCloud = true;
+    const response = await fetch(`${config.url}/rest/v1/app_state?id=eq.${encodeURIComponent(CLOUD_ROW_ID)}&select=data,updated_at`, {
+      headers: supabaseHeaders(config)
+    });
+    if (!response.ok) throw new Error(await response.text());
+    const rows = await response.json();
+    if (!rows.length || !rows[0].data) {
+      if (!options.silent) renderCloudStatus("No hay datos en la nube. Usa Subir datos.", options.statusId);
+      return false;
+    }
+    const cloudState = normalizeState(rows[0].data);
+    const localTime = Date.parse(state.updatedAt || 0);
+    const cloudTime = Date.parse(cloudState.updatedAt || rows[0].updated_at || 0);
+    if (options.force || cloudTime >= localTime) {
+      state = cloudState;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      if (!options.silent) renderCloudStatus("Datos descargados desde Supabase.", options.statusId);
+      return true;
+    }
+    if (!options.silent) renderCloudStatus("Tus datos locales son mas recientes.", options.statusId);
+    return false;
+  } catch (error) {
+    console.error(error);
+    if (!options.silent) renderCloudStatus("No se pudo descargar desde Supabase.", options.statusId);
+    return false;
+  } finally {
+    isSyncingCloud = false;
+  }
+}
+
+async function pushToSupabase(options = {}) {
+  const config = getSupabaseConfig();
+  if (!config || isSyncingCloud) return false;
+  try {
+    const payload = {
+      id: CLOUD_ROW_ID,
+      data: normalizeState(state),
+      updated_at: new Date().toISOString()
+    };
+    const response = await fetch(`${config.url}/rest/v1/app_state`, {
+      method: "POST",
+      headers: {
+        ...supabaseHeaders(config),
+        Prefer: "resolution=merge-duplicates"
+      },
+      body: JSON.stringify(payload)
+    });
+    if (!response.ok) throw new Error(await response.text());
+    if (!options.silent) renderCloudStatus("Datos subidos a Supabase.", options.statusId);
+    return true;
+  } catch (error) {
+    console.error(error);
+    if (!options.silent) renderCloudStatus("No se pudo subir a Supabase.", options.statusId);
+    return false;
+  }
+}
+
+function renderCloudStatus(message, targetId = "cloudStatus") {
+  const target = document.getElementById(targetId);
+  if (target) {
+    target.textContent = message;
+  }
 }
 
 function printTicket(sale) {

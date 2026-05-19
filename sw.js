@@ -1,4 +1,4 @@
-const CACHE_NAME = "matarina-burger-mobile-v8";
+const CACHE_NAME = "matarina-burger-mobile-v9";
 const APP_ASSETS = [
   "./",
   "./index.html",

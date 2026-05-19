@@ -39,6 +39,15 @@
           <label>PIN<input name="pin" required inputmode="numeric" autocomplete="current-password" placeholder="Tu PIN"></label>
           <button class="primary-button" type="submit">Entrar</button>
         </form>
+
+        <form id="authSupabaseForm" class="auth-form cloud-form">
+          <h1>Conectar nube</h1>
+          <p>Usa esto en un celular nuevo para descargar los datos antes de ingresar.</p>
+          <label>Supabase URL<input name="url" type="url" placeholder="https://xxxx.supabase.co"></label>
+          <label>Anon key<input name="key" type="password" placeholder="eyJhbGci..."></label>
+          <button class="ghost-button" type="submit">Guardar y descargar</button>
+          <p class="form-hint" id="authCloudStatus"></p>
+        </form>
       </div>
     </section>
 
@@ -427,6 +436,23 @@
                   <button class="primary-button" type="submit">Guardar logo</button>
                   <button class="ghost-button" id="removeLogo" type="button">Quitar logo</button>
                 </div>
+              </form>
+
+              <form class="panel form-panel" id="supabaseForm">
+                <div class="panel-heading">
+                  <div>
+                    <p class="eyebrow">Nube</p>
+                    <h2>Sincronizar Supabase</h2>
+                  </div>
+                </div>
+                <label>Supabase URL<input name="url" type="url" placeholder="https://xxxx.supabase.co"></label>
+                <label>Anon key<input name="key" type="password" placeholder="eyJhbGci..."></label>
+                <button class="primary-button" type="submit">Guardar conexion</button>
+                <div class="button-row">
+                  <button class="ghost-button" id="uploadCloud" type="button">Subir datos</button>
+                  <button class="ghost-button" id="downloadCloud" type="button">Descargar datos</button>
+                </div>
+                <p class="form-hint" id="cloudStatus"></p>
               </form>
 
               <form class="panel form-panel" id="userForm">
