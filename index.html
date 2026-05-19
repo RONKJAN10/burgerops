@@ -160,6 +160,7 @@
                   <h2>Registrar insumo</h2>
                 </div>
               </div>
+              <label>Fecha<input name="date" type="date"></label>
               <label>Nombre<input name="name" required placeholder="Carne blend 80/20"></label>
               <label>Unidad
                 <select name="unit">
@@ -183,7 +184,7 @@
               </div>
               <div class="table-wrap">
                 <table>
-                  <thead><tr><th>Insumo</th><th>Stock</th><th>Minimo</th><th>Costo</th><th>Estado</th></tr></thead>
+                  <thead><tr><th>Insumo</th><th>Stock</th><th>Minimo</th><th>Costo</th><th>Estado</th><th>Acciones</th></tr></thead>
                   <tbody id="ingredientsTable"></tbody>
                 </table>
               </div>
@@ -200,6 +201,7 @@
                   <h2>Entrada de insumos</h2>
                 </div>
               </div>
+              <label>Fecha<input name="date" type="date"></label>
               <label>Proveedor<input name="supplier" required placeholder="Mercado / proveedor"></label>
               <label>Insumo<select name="ingredientId" id="purchaseIngredient"></select></label>
               <label>Cantidad<input name="quantity" type="number" min="0.01" step="0.01" required></label>
@@ -234,6 +236,7 @@
                     <h2>Registrar producto</h2>
                   </div>
                 </div>
+                <label>Fecha<input name="date" type="date"></label>
                 <label>Producto<input name="name" required placeholder="Cheeseburger clasica"></label>
                 <label>Precio de venta S/<input name="price" type="number" min="0" step="0.01" required></label>
                 <button class="primary-button" type="submit">Guardar producto</button>
@@ -272,11 +275,13 @@
                   <h2>Registrar venta</h2>
                 </div>
               </div>
+              <label>Fecha<input name="date" type="date"></label>
               <label>Producto<select name="productId" id="saleProduct"></select></label>
               <label>Cantidad<input name="quantity" type="number" min="1" step="1" value="1" required></label>
               <label>Total venta S/<input name="saleTotal" type="number" min="0" step="0.01" readonly></label>
               <label>Monto recibido S/<input name="amountReceived" type="number" min="0" step="0.01" placeholder="0.00"></label>
               <label>Vuelto S/<input name="changeDue" type="number" min="0" step="0.01" readonly></label>
+              <label>Observaciones<input name="notes" placeholder="Comentario opcional"></label>
               <label>Canal
                 <select name="channel">
                   <option>Salon</option>
@@ -297,7 +302,7 @@
               </div>
               <div class="table-wrap">
                 <table>
-                  <thead><tr><th>Fecha</th><th>Producto</th><th>Cant.</th><th>Canal</th><th>Total</th><th>Margen</th><th>Acciones</th></tr></thead>
+                  <thead><tr><th>Fecha</th><th>Producto</th><th>Cant.</th><th>Canal</th><th>Total</th><th>Margen</th><th>Obs.</th><th>Acciones</th></tr></thead>
                   <tbody id="salesTable"></tbody>
                 </table>
               </div>
@@ -314,6 +319,7 @@
                   <h2 id="shiftFormTitle">Abrir caja</h2>
                 </div>
               </div>
+              <label>Fecha<input name="date" type="date"></label>
               <label>Monto inicial S/<input name="openingCash" type="number" min="0" step="0.01" placeholder="0.00"></label>
               <label>Monto contado al cierre S/<input name="closingCash" type="number" min="0" step="0.01" placeholder="Solo al cerrar"></label>
               <label>Notas<input name="notes" placeholder="Observaciones del turno"></label>
@@ -346,6 +352,7 @@
                   <h2>Registrar gasto</h2>
                 </div>
               </div>
+              <label>Fecha<input name="date" type="date"></label>
               <label>Concepto<input name="concept" required placeholder="Gas, delivery, movilidad"></label>
               <label>Categoria
                 <select name="category">
@@ -393,6 +400,8 @@
                 <button class="ghost-button" id="exportInventory" type="button">Exportar inventario</button>
                 <button class="ghost-button" id="exportExpenses" type="button">Exportar gastos</button>
                 <button class="ghost-button" id="exportClosings" type="button">Exportar cierres</button>
+                <button class="ghost-button" id="exportXlsx" type="button">Exportar XLSX</button>
+                <button class="ghost-button" id="exportXml" type="button">Exportar XML</button>
               </div>
             </article>
             <article class="panel">

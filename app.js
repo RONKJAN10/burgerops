@@ -178,6 +178,7 @@ function bindForms() {
     const data = Object.fromEntries(new FormData(form));
     state.ingredients.push({
       id: makeId("ing"),
+      date: data.date || todayISO(),
       name: data.name.trim(),
       unit: data.unit,
       stock: Number(data.stock),
@@ -203,7 +204,7 @@ function bindForms() {
     ingredient.cost = total / quantity;
     state.purchases.unshift({
       id: makeId("pur"),
-      date: todayISO(),
+      date: data.date || todayISO(),
       supplier: data.supplier.trim(),
       ingredientId: data.ingredientId,
       quantity,
@@ -223,6 +224,7 @@ function bindForms() {
     const data = Object.fromEntries(new FormData(form));
     state.products.push({
       id: makeId("prod"),
+      date: data.date || todayISO(),
       name: data.name.trim(),
       price: Number(data.price),
       recipe: []
@@ -279,7 +281,7 @@ function bindForms() {
     const amountReceived = Number(data.amountReceived || 0);
     state.sales.unshift({
       id: makeId("sale"),
-      date: todayISO(),
+      date: data.date || todayISO(),
       productId: product.id,
       quantity,
       channel: data.channel,
@@ -287,12 +289,14 @@ function bindForms() {
       cost: unitCost * quantity,
       amountReceived,
       changeDue: Math.max(0, amountReceived - saleTotal),
+      notes: data.notes.trim(),
       shiftId: activeShift.id,
       userId: currentUserId
     });
 
     form.reset();
     form.quantity.value = 1;
+    setDefaultDates();
     updateSaleTotals();
     persistAndRender("Venta registrada.");
   });
@@ -308,7 +312,7 @@ function bindForms() {
     const data = Object.fromEntries(new FormData(form));
     const activeShift = getActiveShift();
     if (activeShift) {
-      activeShift.closedAt = new Date().toISOString();
+      activeShift.closedAt = makeLocalDateTime(data.date || todayISO());
       activeShift.closingCash = Number(data.closingCash || 0);
       activeShift.notes = data.notes.trim();
       saveState();
@@ -319,7 +323,7 @@ function bindForms() {
     }
     state.shifts.unshift({
       id: makeId("shift"),
-      openedAt: new Date().toISOString(),
+      openedAt: makeLocalDateTime(data.date || todayISO()),
       closedAt: "",
       openingCash: Number(data.openingCash || 0),
       closingCash: 0,
@@ -344,8 +348,8 @@ function bindForms() {
     const data = Object.fromEntries(new FormData(form));
     state.expenses.unshift({
       id: makeId("exp"),
-      date: todayISO(),
-      createdAt: new Date().toISOString(),
+      date: data.date || todayISO(),
+      createdAt: makeLocalDateTime(data.date || todayISO()),
       concept: data.concept.trim(),
       category: data.category,
       amount: Number(data.amount),
@@ -360,6 +364,8 @@ function bindForms() {
   document.getElementById("exportInventory").addEventListener("click", () => exportInventory());
   document.getElementById("exportExpenses").addEventListener("click", () => exportExpenses());
   document.getElementById("exportClosings").addEventListener("click", () => exportClosings());
+  document.getElementById("exportXlsx").addEventListener("click", () => exportReportsXLSX());
+  document.getElementById("exportXml").addEventListener("click", () => exportReportsXML());
 
   document.getElementById("supabaseForm").addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -441,6 +447,7 @@ function showView(viewName) {
 function renderAll() {
   renderBrand();
   renderSession();
+  setDefaultDates();
   renderSelectors();
   renderMetrics();
   renderDashboard();
@@ -678,6 +685,7 @@ function renderIngredients() {
         <td data-label="Minimo">${round(item.minStock)} ${item.unit}</td>
         <td data-label="Costo">${money(item.cost)}</td>
         <td data-label="Estado"><span class="pill ${status[1]}">${status[0]}</span></td>
+        <td data-label="Acciones"><div class="row-actions"><button class="ghost-button small-button" type="button" onclick="editIngredient('${item.id}')">Editar</button><button class="ghost-button small-button danger-button" type="button" onclick="deleteIngredient('${item.id}')">Eliminar</button></div></td>
       </tr>
     `;
   }).join("") : `<tr><td data-label="Insumo"><strong>Sin insumos registrados</strong></td><td data-label="Siguiente paso">Agrega tus primeros insumos.</td></tr>`;
@@ -738,6 +746,7 @@ function renderSales() {
         <td data-label="Canal">${sale.channel}</td>
         <td data-label="Total">${money(sale.total)}</td>
         <td data-label="Margen">${money(sale.total - sale.cost)}</td>
+        <td data-label="Obs.">${escapeHTML(sale.notes || "")}</td>
         <td data-label="Acciones"><div class="row-actions"><button class="ghost-button small-button" type="button" onclick="editSale('${sale.id}')">Modificar</button><button class="ghost-button small-button danger-button" type="button" onclick="deleteSale('${sale.id}')">Eliminar</button></div></td>
       </tr>
     `;
@@ -1025,10 +1034,50 @@ function requireAdminPin() {
   return ok;
 }
 
+function editIngredient(id) {
+  if (!requireAdminPin()) return;
+  const ingredient = findIngredient(id);
+  if (!ingredient) return;
+  const date = window.prompt("Fecha (YYYY-MM-DD):", ingredient.date || todayISO());
+  if (!date) return;
+  const name = window.prompt("Nombre del insumo:", ingredient.name);
+  if (!name) return;
+  const unit = window.prompt("Unidad:", ingredient.unit);
+  if (!unit) return;
+  const stock = Number(window.prompt("Stock actual:", ingredient.stock));
+  const minStock = Number(window.prompt("Stock minimo:", ingredient.minStock));
+  const cost = Number(window.prompt("Costo unitario S/:", ingredient.cost));
+  if (![stock, minStock, cost].every(Number.isFinite) || stock < 0 || minStock < 0 || cost < 0) {
+    showToast("Datos de insumo invalidos.");
+    return;
+  }
+  ingredient.date = date;
+  ingredient.name = name.trim();
+  ingredient.unit = unit.trim();
+  ingredient.stock = stock;
+  ingredient.minStock = minStock;
+  ingredient.cost = cost;
+  persistAndRender("Insumo modificado.");
+}
+
+function deleteIngredient(id) {
+  if (!requireAdminPin()) return;
+  const inUse = state.products.some((product) => Array.isArray(product.recipe) && product.recipe.some((line) => line.ingredientId === id))
+    || state.purchases.some((purchase) => purchase.ingredientId === id);
+  if (inUse && !window.confirm("Este insumo tiene compras o recetas asociadas. Deseas eliminarlo de todos modos?")) return;
+  state.ingredients = state.ingredients.filter((ingredient) => ingredient.id !== id);
+  state.products.forEach((product) => {
+    product.recipe = Array.isArray(product.recipe) ? product.recipe.filter((line) => line.ingredientId !== id) : [];
+  });
+  persistAndRender("Insumo eliminado.");
+}
+
 function editProduct(id) {
   if (!requireAdminPin()) return;
   const product = findProduct(id);
   if (!product) return;
+  const date = window.prompt("Fecha (YYYY-MM-DD):", product.date || todayISO());
+  if (!date) return;
   const name = window.prompt("Nombre del producto:", product.name);
   if (!name) return;
   const price = Number(window.prompt("Precio de venta S/:", product.price));
@@ -1036,6 +1085,7 @@ function editProduct(id) {
     showToast("Precio invalido.");
     return;
   }
+  product.date = date;
   product.name = name.trim();
   product.price = price;
   state.sales.forEach((sale) => {
@@ -1058,6 +1108,8 @@ function editPurchase(id) {
   const purchase = state.purchases.find((item) => item.id === id);
   if (!purchase) return;
   const oldIngredient = findIngredient(purchase.ingredientId);
+  const date = window.prompt("Fecha (YYYY-MM-DD):", purchase.date || todayISO());
+  if (!date) return;
   const supplier = window.prompt("Proveedor:", purchase.supplier);
   if (!supplier) return;
   const quantity = Number(window.prompt("Cantidad:", purchase.quantity));
@@ -1071,6 +1123,7 @@ function editPurchase(id) {
     oldIngredient.stock += quantity;
     oldIngredient.cost = total / quantity;
   }
+  purchase.date = date;
   purchase.supplier = supplier.trim();
   purchase.quantity = quantity;
   purchase.total = total;
@@ -1095,6 +1148,8 @@ function editSale(id) {
   const sale = state.sales.find((item) => item.id === id);
   if (!sale) return;
   const product = findProduct(sale.productId);
+  const date = window.prompt("Fecha (YYYY-MM-DD):", sale.date || todayISO());
+  if (!date) return;
   const quantity = Number(window.prompt("Cantidad:", sale.quantity));
   if (!Number.isFinite(quantity) || quantity <= 0) {
     showToast("Cantidad invalida.");
@@ -1114,8 +1169,11 @@ function editSale(id) {
     consumeRecipe(product, sale.quantity);
     return;
   }
+  const notes = window.prompt("Observaciones:", sale.notes || "");
+  sale.date = date;
   sale.quantity = quantity;
   sale.channel = channel.trim();
+  sale.notes = notes || "";
   sale.total = (product?.price || 0) * quantity;
   sale.cost = productCost(product) * quantity;
   persistAndRender("Venta modificada.");
@@ -1135,6 +1193,8 @@ function editShift(id) {
   if (!requireAdminPin()) return;
   const shift = state.shifts.find((item) => item.id === id);
   if (!shift) return;
+  const date = window.prompt("Fecha apertura (YYYY-MM-DD):", shift.openedAt ? shift.openedAt.slice(0, 10) : todayISO());
+  if (!date) return;
   const openingCash = Number(window.prompt("Monto inicial S/:", shift.openingCash));
   const closingCash = Number(window.prompt("Monto contado al cierre S/:", shift.closingCash || 0));
   const notes = window.prompt("Notas:", shift.notes || "");
@@ -1142,6 +1202,7 @@ function editShift(id) {
     showToast("Datos de caja invalidos.");
     return;
   }
+  shift.openedAt = makeLocalDateTime(date);
   shift.openingCash = openingCash;
   shift.closingCash = closingCash;
   shift.notes = notes || "";
@@ -1160,6 +1221,8 @@ function editExpense(id) {
   if (!requireAdminPin()) return;
   const expense = state.expenses.find((item) => item.id === id);
   if (!expense) return;
+  const date = window.prompt("Fecha (YYYY-MM-DD):", expense.date || todayISO());
+  if (!date) return;
   const concept = window.prompt("Concepto:", expense.concept);
   if (!concept) return;
   const category = window.prompt("Categoria:", expense.category);
@@ -1169,6 +1232,8 @@ function editExpense(id) {
     showToast("Monto invalido.");
     return;
   }
+  expense.date = date;
+  expense.createdAt = makeLocalDateTime(date);
   expense.concept = concept.trim();
   expense.category = category.trim();
   expense.amount = amount;
@@ -1353,14 +1418,14 @@ function printTicket(sale) {
 }
 
 function exportSales() {
-  downloadCSV("ventas.csv", [["fecha", "producto", "cantidad", "canal", "total", "recibido", "vuelto", "costo", "margen"], ...state.sales.map((sale) => {
+  downloadCSV("ventas.csv", [["fecha", "producto", "cantidad", "canal", "total", "recibido", "vuelto", "costo", "margen", "observaciones"], ...state.sales.map((sale) => {
     const product = findProduct(sale.productId);
-    return [sale.date, product?.name || "", sale.quantity, sale.channel, sale.total, sale.amountReceived || 0, sale.changeDue || 0, sale.cost, sale.total - sale.cost];
+    return [sale.date, product?.name || "", sale.quantity, sale.channel, sale.total, sale.amountReceived || 0, sale.changeDue || 0, sale.cost, sale.total - sale.cost, sale.notes || ""];
   })]);
 }
 
 function exportInventory() {
-  downloadCSV("inventario.csv", [["insumo", "unidad", "stock", "minimo", "costo_unitario", "valor"], ...state.ingredients.map((item) => [item.name, item.unit, item.stock, item.minStock, item.cost, item.stock * item.cost])]);
+  downloadCSV("inventario.csv", [["fecha", "insumo", "unidad", "stock", "minimo", "costo_unitario", "valor"], ...state.ingredients.map((item) => [item.date || "", item.name, item.unit, item.stock, item.minStock, item.cost, item.stock * item.cost])]);
 }
 
 function exportExpenses() {
@@ -1375,14 +1440,137 @@ function exportClosings() {
   })]);
 }
 
+function buildReportSheets() {
+  return {
+    ventas: [["fecha", "producto", "cantidad", "canal", "total", "recibido", "vuelto", "costo", "margen", "observaciones"], ...state.sales.map((sale) => {
+      const product = findProduct(sale.productId);
+      return [sale.date, product?.name || "", sale.quantity, sale.channel, sale.total, sale.amountReceived || 0, sale.changeDue || 0, sale.cost, sale.total - sale.cost, sale.notes || ""];
+    })],
+    insumos: [["fecha", "insumo", "unidad", "stock", "minimo", "costo_unitario", "valor"], ...state.ingredients.map((item) => [item.date || "", item.name, item.unit, item.stock, item.minStock, item.cost, item.stock * item.cost])],
+    compras: [["fecha", "proveedor", "insumo", "cantidad", "total"], ...state.purchases.map((purchase) => [purchase.date, purchase.supplier, findIngredient(purchase.ingredientId)?.name || "", purchase.quantity, purchase.total])],
+    gastos: [["fecha", "concepto", "categoria", "monto"], ...state.expenses.map((expense) => [expense.date, expense.concept, expense.category, expense.amount])],
+    caja: [["apertura", "cierre", "usuario", "inicial", "ventas", "gastos", "esperado", "contado"], ...state.shifts.map((shift) => {
+      const stats = shiftStats(shift.id);
+      const user = state.users.find((item) => item.id === shift.userId);
+      return [shift.openedAt, shift.closedAt, user?.name || "", shift.openingCash, stats.salesTotal, stats.expensesTotal, stats.expectedCash, shift.closingCash];
+    })]
+  };
+}
+
+function exportReportsXML() {
+  const sheets = buildReportSheets();
+  const xml = `<?xml version="1.0" encoding="UTF-8"?><reportes>${Object.entries(sheets).map(([name, rows]) => `<hoja nombre="${xmlEscape(name)}">${rows.slice(1).map((row) => `<registro>${rows[0].map((head, index) => `<${safeXmlTag(head)}>${xmlEscape(row[index] ?? "")}</${safeXmlTag(head)}>`).join("")}</registro>`).join("")}</hoja>`).join("")}</reportes>`;
+  downloadBlob("reportes.xml", new Blob([xml], { type: "application/xml;charset=utf-8" }));
+}
+
+function exportReportsXLSX() {
+  const sheets = buildReportSheets();
+  downloadBlob("reportes.xlsx", createXlsxBlob(sheets));
+}
+
 function downloadCSV(filename, rows) {
   const csv = rows.map((row) => row.map((value) => `"${String(value ?? "").replaceAll('"', '""')}"`).join(",")).join("\n");
-  const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" });
+  downloadBlob(filename, new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" }));
+}
+
+function downloadBlob(filename, blob) {
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
   link.download = filename;
   link.click();
   URL.revokeObjectURL(link.href);
+}
+
+function createXlsxBlob(sheets) {
+  const sheetNames = Object.keys(sheets);
+  const files = {
+    "[Content_Types].xml": `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${sheetNames.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("")}</Types>`,
+    "_rels/.rels": `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`,
+    "xl/workbook.xml": `<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sheetNames.map((name, i) => `<sheet name="${xmlEscape(name).slice(0, 31)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join("")}</sheets></workbook>`,
+    "xl/_rels/workbook.xml.rels": `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheetNames.map((_, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join("")}</Relationships>`
+  };
+  sheetNames.forEach((name, i) => {
+    files[`xl/worksheets/sheet${i + 1}.xml`] = sheetXml(sheets[name]);
+  });
+  return new Blob([zipStore(files)], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+}
+
+function sheetXml(rows) {
+  return `<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${rows.map((row, r) => `<row r="${r + 1}">${row.map((value, c) => `<c r="${columnName(c)}${r + 1}" t="inlineStr"><is><t>${xmlEscape(value ?? "")}</t></is></c>`).join("")}</row>`).join("")}</sheetData></worksheet>`;
+}
+
+function zipStore(files) {
+  const encoder = new TextEncoder();
+  const chunks = [];
+  const central = [];
+  let offset = 0;
+  Object.entries(files).forEach(([name, text]) => {
+    const nameBytes = encoder.encode(name);
+    const data = encoder.encode(text);
+    const crc = crc32(data);
+    const local = new Uint8Array(30 + nameBytes.length);
+    const view = new DataView(local.buffer);
+    view.setUint32(0, 0x04034b50, true);
+    view.setUint16(4, 20, true);
+    view.setUint32(14, crc, true);
+    view.setUint32(18, data.length, true);
+    view.setUint32(22, data.length, true);
+    view.setUint16(26, nameBytes.length, true);
+    local.set(nameBytes, 30);
+    chunks.push(local, data);
+    const header = new Uint8Array(46 + nameBytes.length);
+    const hview = new DataView(header.buffer);
+    hview.setUint32(0, 0x02014b50, true);
+    hview.setUint16(4, 20, true);
+    hview.setUint16(6, 20, true);
+    hview.setUint32(16, crc, true);
+    hview.setUint32(20, data.length, true);
+    hview.setUint32(24, data.length, true);
+    hview.setUint16(28, nameBytes.length, true);
+    hview.setUint32(42, offset, true);
+    header.set(nameBytes, 46);
+    central.push(header);
+    offset += local.length + data.length;
+  });
+  const centralSize = central.reduce((total, item) => total + item.length, 0);
+  const end = new Uint8Array(22);
+  const eview = new DataView(end.buffer);
+  eview.setUint32(0, 0x06054b50, true);
+  eview.setUint16(8, central.length, true);
+  eview.setUint16(10, central.length, true);
+  eview.setUint32(12, centralSize, true);
+  eview.setUint32(16, offset, true);
+  return new Blob([...chunks, ...central, end]);
+}
+
+function crc32(bytes) {
+  let crc = -1;
+  for (const byte of bytes) {
+    crc ^= byte;
+    for (let i = 0; i < 8; i++) {
+      crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+    }
+  }
+  return (crc ^ -1) >>> 0;
+}
+
+function columnName(index) {
+  let name = "";
+  let number = index + 1;
+  while (number) {
+    const remainder = (number - 1) % 26;
+    name = String.fromCharCode(65 + remainder) + name;
+    number = Math.floor((number - 1) / 26);
+  }
+  return name;
+}
+
+function xmlEscape(value) {
+  return String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&apos;");
+}
+
+function safeXmlTag(value) {
+  return String(value).replace(/[^a-zA-Z0-9_]/g, "_").replace(/^[^a-zA-Z_]/, "_$&");
 }
 
 function fileToDataURL(file) {
@@ -1433,6 +1621,22 @@ function localISO(date) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function setDefaultDates() {
+  document.querySelectorAll('input[type="date"]').forEach((input) => {
+    if (!input.value) {
+      input.value = todayISO();
+    }
+  });
+}
+
+function makeLocalDateTime(dateValue) {
+  const now = new Date();
+  const hours = String(now.getHours()).padStart(2, "0");
+  const minutes = String(now.getMinutes()).padStart(2, "0");
+  const seconds = String(now.getSeconds()).padStart(2, "0");
+  return `${dateValue}T${hours}:${minutes}:${seconds}`;
 }
 
 function periodStart(type) {
